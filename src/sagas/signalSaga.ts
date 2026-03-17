@@ -1,0 +1,64 @@
+import { call, put, select, takeLatest } from 'redux-saga/effects';
+import { setCurrentSignal, setTechnicalFactors, setAnalyzing, setError } from '@/store/slices/signalSlice';
+import { analyzeMarketWithAI, calculateTechnicalFactors } from '@/services/claude';
+import { fetchKlines } from '@/services/binance';
+import type { RootState } from '@/store';
+import type { Signal, Coin, Timeframe } from '@/types';
+import { generateId } from '@/utils/formatters';
+import { TIMEFRAME_INTERVALS } from '@/utils/constants';
+
+interface AnalyzeAction {
+  type: string;
+  payload: {
+    coin: Coin;
+    timeframe: Timeframe;
+  };
+}
+
+function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
+  const { coin, timeframe } = action.payload;
+  
+  yield put(setAnalyzing(true));
+  yield put(setError(null));
+  
+  try {
+    const symbol = `${coin.symbol}/USDT`;
+    const interval = TIMEFRAME_INTERVALS[timeframe];
+    
+    const candles = yield call(fetchKlines, symbol, timeframe, 200);
+    
+    if (!candles || candles.length === 0) {
+      throw new Error('No candle data available');
+    }
+    
+    const technicalFactors = calculateTechnicalFactors(candles, coin);
+    yield put(setTechnicalFactors(technicalFactors));
+    
+    const aiAnalysis = yield call(analyzeMarketWithAI, coin, candles, technicalFactors, timeframe);
+    
+    const signal: Signal = {
+      id: generateId(),
+      symbol: coin.symbol,
+      type: aiAnalysis.type || 'HOLD',
+      confidence: aiAnalysis.confidence || 50,
+      timeframe,
+      price: coin.price,
+      reasoning: aiAnalysis.reasoning || 'Analysis based on technical factors',
+      technicalFactors,
+      aiAnalysis: aiAnalysis.aiAnalysis,
+      sources: aiAnalysis.sources || ['Technical Analysis'],
+      createdAt: Date.now(),
+    };
+    
+    yield put(setCurrentSignal(signal));
+    
+  } catch (error: any) {
+    yield put(setError(error.message || 'Analysis failed'));
+  } finally {
+    yield put(setAnalyzing(false));
+  }
+}
+
+export default function* signalSaga(): Generator<any, void, any> {
+  yield takeLatest('signals/analyze', analyzeMarketSaga);
+}
