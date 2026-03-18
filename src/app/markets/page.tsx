@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, TrendingUp, TrendingDown, Star, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/Layout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSelectedCoin } from '@/store/slices/marketSlice';
@@ -9,6 +10,7 @@ import { formatPrice, formatPercentage, formatCompactNumber } from '@/utils/form
 import { clsx } from 'clsx';
 
 export default function MarketsPage() {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const { coins, loading, selectedCoin } = useAppSelector((state) => state.market);
   const [searchTerm, setSearchTerm] = useState('');
@@ -170,7 +172,8 @@ export default function MarketsPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleSelectCoin(coin.symbol);
+                          dispatch(setSelectedCoin(coin.symbol));
+                          router.push('/trading');
                         }}
                         className="px-3 py-1 text-xs bg-[#3b82f6] rounded hover:bg-[#2563eb] transition-colors"
                       >
