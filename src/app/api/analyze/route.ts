@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'http://localhost:3000',
+        'HTTP-Referer': 'https://crypto-mind-virid.vercel.app',
         'X-Title': 'CryptoMind',
       },
       body: JSON.stringify({
