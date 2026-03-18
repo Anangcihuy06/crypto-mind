@@ -59,11 +59,13 @@ function* fetchCandlesSaga(): Generator<any, void, any> {
 
 function* connectWebSocketSaga(symbols: string[]): Generator<any, void, any> {
   try {
+    console.log('Connecting WebSocket for symbols:', symbols);
     binanceWS.connect(symbols);
     wsConnected = true;
 
     symbols.forEach((symbol: string) => {
       binanceWS.subscribe(symbol, (data: TickerData) => {
+        console.log('Received ticker update:', data.symbol, data.price);
         store.dispatch(updatePrice({
           symbol: data.symbol,
           price: data.price,
@@ -77,6 +79,7 @@ function* connectWebSocketSaga(symbols: string[]): Generator<any, void, any> {
     
   } catch (error: any) {
     console.error('WebSocket connection error:', error);
+    wsConnected = false;
     yield put(setError('Real-time connection failed, using cached data'));
   }
 }
@@ -99,9 +102,25 @@ function* autoRefreshSaga(): Generator<any, void, any> {
   }
 }
 
+function* reconnectWebSocketSaga(): Generator<any, void, any> {
+  while (true) {
+    yield delay(60000);
+    
+    if (!wsConnected) {
+      const state: RootState = yield select();
+      if (state.market.coins.length > 0) {
+        console.log('Attempting to reconnect WebSocket...');
+        const symbols = state.market.coins.slice(0, 20).map((c: Coin) => c.symbol);
+        yield fork(connectWebSocketSaga, symbols);
+      }
+    }
+  }
+}
+
 export default function* marketSaga(): Generator<any, void, any> {
   yield fork(watchSelectedCoin);
   yield fork(autoRefreshSaga);
+  yield fork(reconnectWebSocketSaga);
   
   yield takeLatest('market/fetchMarketData', fetchMarketDataSaga);
 }

@@ -1,21 +1,69 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Star } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
-import { setSelectedCoin } from '@/store/slices/marketSlice';
+import { setSelectedCoin, updatePrice } from '@/store/slices/marketSlice';
+import { updatePositionsPrices } from '@/store/slices/portfolioSlice';
 import { formatPrice, formatPercentage } from '@/utils/formatters';
 import { clsx } from 'clsx';
 
 export function Sidebar() {
   const dispatch = useAppDispatch();
-  const { coins, loading, selectedCoin } = useAppSelector((state) => state.market);
+  const { coins, selectedCoin, prices } = useAppSelector((state) => state.market);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (coins.length === 0) {
       dispatch({ type: 'market/fetchMarketData' });
     }
   }, [dispatch, coins.length]);
+
+  useEffect(() => {
+    if (coins.length === 0) return;
+
+    const symbols = coins.slice(0, 20).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
+    const wsUrl = `wss://stream.binance.com:9443/stream?streams=${symbols}`;
+    
+    console.log('Connecting WebSocket from Sidebar...');
+    wsRef.current = new WebSocket(wsUrl);
+
+    wsRef.current.onopen = () => {
+      console.log('WebSocket connected from Sidebar');
+    };
+
+    wsRef.current.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.data) {
+          const ticker = message.data;
+          const symbol = ticker.s.replace('USDT', '');
+          const price = parseFloat(ticker.c);
+          const change24h = parseFloat(ticker.P);
+          
+          dispatch(updatePrice({ symbol, price, change24h }));
+          dispatch(updatePositionsPrices({ [symbol]: price }));
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    wsRef.current.onclose = () => {
+      console.log('WebSocket disconnected from Sidebar');
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [coins.length, dispatch]);
 
   const topGainers = [...coins]
     .sort((a, b) => b.change24h - a.change24h)
@@ -27,6 +75,14 @@ export function Sidebar() {
 
   const handleSelectCoin = (symbol: string) => {
     dispatch(setSelectedCoin(symbol));
+  };
+
+  const getPrice = (symbol: string) => {
+    return prices[symbol] || coins.find(c => c.symbol === symbol)?.price || 0;
+  };
+
+  const getChange = (symbol: string) => {
+    return prices[symbol] ? coins.find(c => c.symbol === symbol)?.change24h || 0 : 0;
   };
 
   return (
@@ -52,7 +108,7 @@ export function Sidebar() {
               </div>
               <div className="flex items-center gap-1 text-[#00d26a]">
                 <TrendingUp className="w-3 h-3" />
-                <span className="text-xs">{formatPercentage(coin.change24h)}</span>
+                <span className="text-xs">{formatPercentage(getChange(coin.symbol))}</span>
               </div>
             </button>
           ))}
@@ -80,7 +136,7 @@ export function Sidebar() {
               </div>
               <div className="flex items-center gap-1 text-[#ff3b30]">
                 <TrendingDown className="w-3 h-3" />
-                <span className="text-xs">{formatPercentage(coin.change24h)}</span>
+                <span className="text-xs">{formatPercentage(getChange(coin.symbol))}</span>
               </div>
             </button>
           ))}
@@ -107,7 +163,7 @@ export function Sidebar() {
                 <Star className="w-3 h-3 text-[#fbbf24]" />
                 <span className="text-sm font-medium">{coin.symbol}</span>
               </div>
-              <span className="text-sm text-[#f8fafc]">${formatPrice(coin.price)}</span>
+              <span className="text-sm text-[#f8fafc]">${formatPrice(getPrice(coin.symbol))}</span>
             </button>
           ))}
         </div>
