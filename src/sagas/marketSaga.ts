@@ -22,6 +22,11 @@ function* fetchMarketDataSaga(): Generator<any, void, any> {
     });
     yield put(updatePositionsPrices(prices));
     
+    const state: RootState = yield select();
+    if (!state.market.candles || state.market.candles.length === 0) {
+      yield call(fetchCandlesSaga);
+    }
+    
     if (!wsConnected) {
       yield fork(connectWebSocketSaga, coins.slice(0, 20).map((c: Coin) => c.symbol));
     }
