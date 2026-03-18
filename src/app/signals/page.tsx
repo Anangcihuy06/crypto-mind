@@ -34,18 +34,20 @@ export default function SignalsPage() {
     const coin = coins.find(c => c.symbol === selectedCoin);
     if (!coin) return;
 
+    const timeframe = selectedTimeframe || '1H';
+
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
       prevCoinRef.current = selectedCoin;
-      prevTimeframeRef.current = selectedTimeframe;
-      dispatch({ type: 'signals/analyze', payload: { coin, timeframe: selectedTimeframe } });
+      prevTimeframeRef.current = timeframe;
+      dispatch({ type: 'signals/analyze', payload: { coin, timeframe } });
       return;
     }
 
-    if (selectedCoin !== prevCoinRef.current || selectedTimeframe !== prevTimeframeRef.current) {
+    if (selectedCoin !== prevCoinRef.current || timeframe !== prevTimeframeRef.current) {
       prevCoinRef.current = selectedCoin;
-      prevTimeframeRef.current = selectedTimeframe;
-      dispatch({ type: 'signals/analyze', payload: { coin, timeframe: selectedTimeframe } });
+      prevTimeframeRef.current = timeframe;
+      dispatch({ type: 'signals/analyze', payload: { coin, timeframe } });
     }
   }, [selectedCoin, selectedTimeframe, coins, dispatch]);
 

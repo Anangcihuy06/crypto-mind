@@ -22,7 +22,12 @@ function getHigherTimeframe(timeframe: Timeframe): Timeframe | null {
 }
 
 function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
-  const { coin, timeframe } = action.payload;
+  const { coin, timeframe = action.payload.timeframe } = action.payload;
+  
+  if (!timeframe) {
+    console.error('No timeframe provided');
+    return;
+  }
   
   yield put(setAnalyzing(true));
   yield put(setError(null));
@@ -30,12 +35,7 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
   try {
     const symbol = `${coin.symbol}/USDT`;
     
-    const [candles, higherTimeframeCandles] = yield all([
-      call(fetchKlines, symbol, timeframe, 200),
-      getHigherTimeframe(timeframe) 
-        ? call(fetchKlines, symbol, getHigherTimeframe(timeframe)!, 100)
-        : call(Promise.resolve, null)
-    ]);
+    const candles = yield call(fetchKlines, symbol, timeframe, 200);
     
     if (!candles || candles.length === 0) {
       throw new Error('No candle data available');
@@ -44,13 +44,24 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
     const technicalFactors = calculateTechnicalFactors(candles, coin);
     yield put(setTechnicalFactors(technicalFactors));
     
+    let higherTimeframeCandles: CandleData[] | undefined;
+    const higherTF = getHigherTimeframe(timeframe);
+    
+    if (higherTF) {
+      try {
+        higherTimeframeCandles = yield call(fetchKlines, symbol, higherTF, 50);
+      } catch (e) {
+        console.warn('Failed to fetch higher timeframe data:', e);
+      }
+    }
+    
     const aiAnalysis = yield call(
       analyzeMarketWithAI, 
       coin, 
       candles, 
       technicalFactors, 
       timeframe,
-      higherTimeframeCandles || undefined
+      higherTimeframeCandles
     );
     
     const signal: Signal = {
@@ -75,6 +86,7 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
     yield put(setCurrentSignal(signal));
     
   } catch (error: any) {
+    console.error('Analysis error:', error);
     yield put(setError(error.message || 'Analysis failed'));
   } finally {
     yield put(setAnalyzing(false));
