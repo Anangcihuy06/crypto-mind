@@ -47,6 +47,26 @@ const signalSlice = createSlice({
       state.current = null;
       state.technicalFactors = null;
     },
+    updateSignalResult(state, action: PayloadAction<{
+      signalId: string;
+      result: 'WIN' | 'LOSS' | 'BREAKEVEN';
+      evaluationPrice: number;
+    }>) {
+      const { signalId, result, evaluationPrice } = action.payload;
+      const signal = state.history.find(s => s.id === signalId);
+      if (signal) {
+        signal.status = 'CLOSED';
+        signal.result = result;
+        signal.evaluationPrice = evaluationPrice;
+        signal.evaluatedAt = Date.now();
+      }
+      if (state.current && state.current.id === signalId) {
+        state.current.status = 'CLOSED';
+        state.current.result = result;
+        state.current.evaluationPrice = evaluationPrice;
+        state.current.evaluatedAt = Date.now();
+      }
+    },
   },
 });
 
@@ -57,6 +77,7 @@ export const {
   setAnalyzing,
   setError,
   clearSignal,
+  updateSignalResult,
 } = signalSlice.actions;
 
 export default signalSlice.reducer;

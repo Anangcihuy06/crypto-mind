@@ -85,7 +85,7 @@ export interface Signal {
   confidence: number;
   timeframe: Timeframe;
   price: number;
-  entryPrice?: number;
+  entryPrice: number;
   stopLoss?: number;
   takeProfit?: number;
   riskRewardRatio?: number;
@@ -95,6 +95,10 @@ export interface Signal {
   sources: string[];
   model?: string;
   createdAt: number;
+  status: 'PENDING' | 'CLOSED';
+  result?: 'WIN' | 'LOSS' | 'BREAKEVEN';
+  evaluationPrice?: number;
+  evaluatedAt?: number;
 }
 
 export interface TechnicalFactors {

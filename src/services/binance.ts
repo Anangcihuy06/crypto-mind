@@ -40,6 +40,22 @@ export async function fetch24hrTicker(symbol: string): Promise<any> {
   }
 }
 
+export async function fetchTicker(symbol: string): Promise<{ price: number }> {
+  try {
+    const cleanSymbol = symbol.replace('/', '').replace('USDT', '');
+    const response = await api.get(`/api/candles?symbol=${cleanSymbol}&timeframe=1h`);
+    const candles = response.data;
+    if (candles && candles.length > 0) {
+      const lastCandle = candles[candles.length - 1];
+      return { price: parseFloat(lastCandle.close) };
+    }
+    throw new Error('No ticker data available');
+  } catch (error) {
+    console.error('Error fetching ticker:', error);
+    throw error;
+  }
+}
+
 export async function fetchOrderBook(symbol: string, limit: number = 20): Promise<any> {
   try {
     const response = await axios.get(`${BINANCE_BASE_URL}/depth`, {
