@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { TrendingUp, TrendingDown, Star } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSelectedCoin, updatePrice } from '@/store/slices/marketSlice';
@@ -11,7 +11,6 @@ import { clsx } from 'clsx';
 export function Sidebar() {
   const dispatch = useAppDispatch();
   const { coins, selectedCoin, prices } = useAppSelector((state) => state.market);
-  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (coins.length === 0) {
@@ -22,48 +21,70 @@ export function Sidebar() {
   useEffect(() => {
     if (coins.length === 0) return;
 
-    const symbols = coins.slice(0, 20).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
-    const wsUrl = `wss://stream.binance.com:9443/stream?streams=${symbols}`;
+    const STABLECOINS = ['USDT', 'USDC', 'DAI', 'USDe', 'BUSD', 'USDD', 'TUSD', 'USDP'];
+    const filteredCoins = coins.filter(c => !STABLECOINS.includes(c.symbol));
     
-    console.log('Connecting WebSocket from Sidebar...');
-    wsRef.current = new WebSocket(wsUrl);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let isIntentionalClose = false;
 
-    wsRef.current.onopen = () => {
-      console.log('WebSocket connected from Sidebar');
-    };
+    const connect = () => {
+      if (ws?.readyState === WebSocket.OPEN) return;
+      
+      const symbols = filteredCoins.slice(0, 20).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
+      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${symbols}`;
+      
+      console.log('Connecting WebSocket from Sidebar...', wsUrl);
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected from Sidebar');
+      };
 
-    wsRef.current.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.data) {
-          const ticker = message.data;
-          const symbol = ticker.s.replace('USDT', '');
-          const price = parseFloat(ticker.c);
-          const change24h = parseFloat(ticker.P);
-          
-          dispatch(updatePrice({ symbol, price, change24h }));
-          dispatch(updatePositionsPrices({ [symbol]: price }));
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.data) {
+            const ticker = message.data;
+            const symbol = ticker.s.replace('USDT', '');
+            const price = parseFloat(ticker.c);
+            const change24h = parseFloat(ticker.P);
+            
+            dispatch(updatePrice({ symbol, price, change24h }));
+            dispatch(updatePositionsPrices({ [symbol]: price }));
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
         }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected from Sidebar', event.code, event.reason);
+        if (!isIntentionalClose) {
+          reconnectTimeout = setTimeout(() => {
+            connect();
+          }, 3000);
+        }
+      };
     };
 
-    wsRef.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    wsRef.current.onclose = () => {
-      console.log('WebSocket disconnected from Sidebar');
-    };
+    connect();
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      isIntentionalClose = true;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (ws) {
+        ws.close();
+        ws = null;
       }
     };
-  }, [coins.length, dispatch]);
+  }, [coins, dispatch]);
 
   const topGainers = [...coins]
     .sort((a, b) => b.change24h - a.change24h)

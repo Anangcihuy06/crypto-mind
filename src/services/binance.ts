@@ -113,10 +113,13 @@ class BinanceWebSocket {
   private subscriptions: Map<string, TickerCallback> = new Map();
   private symbols: string[] = [];
   private isConnected = false;
+  private isIntentionalClose = false;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
 
   connect(symbols: string[]) {
     this.symbols = symbols;
     this.reconnectAttempts = 0;
+    this.isIntentionalClose = false;
     this.createConnection();
   }
 
@@ -169,7 +172,9 @@ class BinanceWebSocket {
       this.ws.onclose = () => {
         console.log('WebSocket disconnected');
         this.isConnected = false;
-        this.attemptReconnect();
+        if (!this.isIntentionalClose) {
+          this.attemptReconnect();
+        }
       };
     } catch (error) {
       console.error('Error creating WebSocket:', error);
@@ -178,11 +183,21 @@ class BinanceWebSocket {
   }
 
   private attemptReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts && this.symbols.length > 0) {
-      this.reconnectAttempts++;
-      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-      setTimeout(() => this.createConnection(), this.reconnectDelay);
+    if (this.reconnectAttempts >= this.maxReconnectAttempts || this.isIntentionalClose) {
+      return;
     }
+    
+    if (this.reconnectTimeout) return;
+    
+    this.reconnectAttempts++;
+    console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
+      if (this.symbols.length > 0 && !this.isIntentionalClose) {
+        this.createConnection();
+      }
+    }, this.reconnectDelay);
   }
 
   subscribe(symbol: string, callback: TickerCallback) {
@@ -194,6 +209,11 @@ class BinanceWebSocket {
   }
 
   disconnect() {
+    this.isIntentionalClose = true;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
     this.symbols = [];
     this.subscriptions.clear();
     if (this.ws) {
@@ -216,6 +236,9 @@ class KlineWebSocket {
   private currentSymbol: string = '';
   private currentTimeframe: string = '';
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private isIntentionalClose = false;
 
   connect(symbol: string, timeframe: string) {
     if (this.currentSymbol === symbol && this.currentTimeframe === timeframe && this.ws?.readyState === WebSocket.OPEN) {
@@ -223,10 +246,16 @@ class KlineWebSocket {
     }
 
     this.disconnect();
+    this.isIntentionalClose = false;
     this.currentSymbol = symbol;
     this.currentTimeframe = timeframe;
+    this.reconnectAttempts = 0;
 
-    const stream = `${symbol.toLowerCase()}usdt@kline_${timeframe}`;
+    this.createConnection();
+  }
+
+  private createConnection() {
+    const stream = `${this.currentSymbol.toLowerCase()}usdt@kline_${this.currentTimeframe}`;
     const wsUrl = `wss://stream.binance.com:9443/stream?streams=${stream}`;
 
     try {
@@ -234,6 +263,7 @@ class KlineWebSocket {
 
       this.ws.onopen = () => {
         console.log('Kline WebSocket connected:', stream);
+        this.reconnectAttempts = 0;
       };
 
       this.ws.onmessage = (event) => {
@@ -252,7 +282,7 @@ class KlineWebSocket {
               volume: parseFloat(kline.v),
             };
 
-            const callback = this.subscriptions.get(symbol);
+            const callback = this.subscriptions.get(this.currentSymbol);
             if (callback) {
               callback(data);
             }
@@ -268,7 +298,9 @@ class KlineWebSocket {
 
       this.ws.onclose = () => {
         console.log('Kline WebSocket disconnected');
-        this.attemptReconnect();
+        if (!this.isIntentionalClose) {
+          this.attemptReconnect();
+        }
       };
     } catch (error) {
       console.error('Error creating Kline WebSocket:', error);
@@ -277,14 +309,22 @@ class KlineWebSocket {
   }
 
   private attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('Max reconnect attempts reached for Kline WebSocket');
+      return;
+    }
+    
     if (this.reconnectTimeout) return;
+    
+    this.reconnectAttempts++;
+    console.log(`Attempting to reconnect Kline WebSocket (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
     
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
-      if (this.currentSymbol && this.currentTimeframe) {
-        this.connect(this.currentSymbol, this.currentTimeframe);
+      if (this.currentSymbol && this.currentTimeframe && !this.isIntentionalClose) {
+        this.createConnection();
       }
-    }, 5000);
+    }, 3000);
   }
 
   subscribe(symbol: string, callback: KlineCallback) {
@@ -296,6 +336,7 @@ class KlineWebSocket {
   }
 
   disconnect() {
+    this.isIntentionalClose = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

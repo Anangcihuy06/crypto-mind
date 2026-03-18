@@ -14,7 +14,6 @@ export function PriceChart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const candleSeriesRef = useRef<any>(null);
-  const lastKlineRef = useRef<KlineData | null>(null);
   
   const dispatch = useAppDispatch();
   const { candles, selectedCoin, selectedTimeframe, candlesLoading } = useAppSelector(
@@ -32,11 +31,7 @@ export function PriceChart() {
       close: data.close,
     };
 
-    if (lastKlineRef.current && lastKlineRef.current.time === data.time) {
-      candleSeriesRef.current.update(candleData);
-    } else {
-      lastKlineRef.current = data;
-    }
+    candleSeriesRef.current.update(candleData);
   }, []);
 
   useEffect(() => {
@@ -95,8 +90,6 @@ export function PriceChart() {
   }, []);
 
   useEffect(() => {
-    lastKlineRef.current = null;
-    
     if (candleSeriesRef.current && candles.length > 0) {
       const chartData = candles.map((candle) => ({
         time: candle.time as Time,
@@ -127,7 +120,6 @@ export function PriceChart() {
   }, [selectedCoin, selectedTimeframe, handleKlineUpdate]);
 
   const handleTimeframeChange = (tf: Timeframe) => {
-    lastKlineRef.current = null;
     dispatch(setSelectedTimeframe(tf));
   };
 
