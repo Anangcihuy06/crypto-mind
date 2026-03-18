@@ -71,18 +71,20 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
       higherTimeframeCandles
     );
     
+    const validatedSignal = validateSignal(aiAnalysis, technicalFactors, coin.price);
+    
     const signal: Signal = {
       id: generateId(),
       symbol: coin.symbol,
-      type: aiAnalysis.type || 'HOLD',
-      confidence: aiAnalysis.confidence || 50,
+      type: validatedSignal.type,
+      confidence: validatedSignal.confidence,
       timeframe,
       price: coin.price,
       entryPrice: aiAnalysis.entryPrice || coin.price,
       stopLoss: aiAnalysis.stopLoss,
       takeProfit: aiAnalysis.takeProfit,
       riskRewardRatio: aiAnalysis.riskRewardRatio,
-      reasoning: aiAnalysis.reasoning || 'Analysis based on technical factors',
+      reasoning: validatedSignal.reasoning,
       technicalFactors,
       aiAnalysis: aiAnalysis.aiAnalysis,
       sources: aiAnalysis.sources || ['Technical Analysis'],
@@ -99,6 +101,66 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
   } finally {
     yield put(setAnalyzing(false));
   }
+}
+
+function validateSignal(signal: Partial<Signal>, technicalFactors: any, currentPrice: number): { type: 'BUY' | 'SELL' | 'HOLD', confidence: number, reasoning: string } {
+  const type = signal.type || 'HOLD';
+  let confidence = signal.confidence || 50;
+  let reasoning = signal.reasoning || '';
+  
+  let finalType: 'BUY' | 'SELL' | 'HOLD' = type === 'BUY' || type === 'SELL' ? type : 'HOLD';
+
+  if (!type || type === 'HOLD') {
+    return { type: 'HOLD', confidence, reasoning: reasoning || 'No clear signal' };
+  }
+
+  let adjustedConfidence = confidence;
+  let adjustedReasoning = reasoning;
+
+  const trend = technicalFactors?.trend || 'neutral';
+  const rsi = technicalFactors?.rsi || 50;
+  const macdHistogram = technicalFactors?.macd?.histogram || 0;
+  
+  let conflictingFactors = 0;
+  let confirmingFactors = 0;
+
+  if (type === 'BUY') {
+    if (trend === 'bearish') conflictingFactors++;
+    else confirmingFactors++;
+    
+    if (rsi > 60) conflictingFactors++;
+    else if (rsi < 45) confirmingFactors++;
+    
+    if (macdHistogram < 0) conflictingFactors++;
+    else confirmingFactors++;
+
+    if (currentPrice > technicalFactors?.movingAverages?.sma50) confirmingFactors++;
+    else conflictingFactors++;
+  } else if (type === 'SELL') {
+    if (trend === 'bullish') conflictingFactors++;
+    else confirmingFactors++;
+    
+    if (rsi < 40) conflictingFactors++;
+    else if (rsi > 55) confirmingFactors++;
+    
+    if (macdHistogram > 0) conflictingFactors++;
+    else confirmingFactors++;
+
+    if (currentPrice < technicalFactors?.movingAverages?.sma50) confirmingFactors++;
+    else conflictingFactors++;
+  }
+
+  if (conflictingFactors >= 2) {
+    console.log(`Signal validation: ${type} has ${conflictingFactors} conflicting factors, downgrading to HOLD`);
+    finalType = 'HOLD';
+    adjustedConfidence = Math.max(adjustedConfidence - 30, 20);
+    adjustedReasoning = `${reasoning}. WARNING: Multiple conflicting indicators detected (${conflictingFactors} factors against signal). Validated as HOLD to prevent false signal.`;
+  } else if (conflictingFactors === 1 && confirmingFactors < 2) {
+    adjustedConfidence = Math.max(adjustedConfidence - 15, 30);
+    adjustedReasoning = `${reasoning}. Note: One conflicting indicator detected, confidence reduced.`;
+  }
+
+  return { type: finalType, confidence: adjustedConfidence, reasoning: adjustedReasoning };
 }
 
 function* evaluateSignalSaga(signal: Signal): Generator<any, void, any> {
