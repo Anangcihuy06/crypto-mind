@@ -62,6 +62,86 @@ function findResistanceLevels(prices: number[]): number[] {
   return levels.slice(0, 3);
 }
 
+interface VolumeAnalysis {
+  trend: 'increasing' | 'decreasing' | 'stable';
+  avgVolume: number;
+  currentVolume: number;
+  volumeRatio: number;
+}
+
+function analyzeVolume(volumes: number[]): VolumeAnalysis {
+  const recent = volumes.slice(-20);
+  const earlier = volumes.slice(-40, -20);
+  
+  const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const earlierAvg = earlier.length > 0 ? earlier.reduce((a, b) => a + b, 0) / earlier.length : recentAvg;
+  
+  const currentVolume = volumes[volumes.length - 1];
+  const volumeRatio = recentAvg > 0 ? currentVolume / recentAvg : 1;
+  
+  let trend: 'increasing' | 'decreasing' | 'stable' = 'stable';
+  if (recentAvg > earlierAvg * 1.2) trend = 'increasing';
+  else if (recentAvg < earlierAvg * 0.8) trend = 'decreasing';
+  
+  return {
+    trend,
+    avgVolume: recentAvg,
+    currentVolume,
+    volumeRatio,
+  };
+}
+
+function detectPriceStructure(prices: number[]): string {
+  const recent = prices.slice(-20);
+  const high = Math.max(...recent);
+  const low = Math.min(...recent);
+  const current = recent[recent.length - 1];
+  const range = high - low;
+  
+  if (current > high * 0.95) return 'Near High (Resistance Breakout)';
+  if (current < low * 1.05) return 'Near Low (Support Test)';
+  if (current > (high + low) / 2 + range * 0.3) return 'Upper Range (Bullish)';
+  if (current < (high + low) / 2 - range * 0.3) return 'Lower Range (Bearish)';
+  return 'Mid Range (Neutral)';
+}
+
+async function fetchBTCData(): Promise<{ price: number; change24h: number; dominance: number } | null> {
+  try {
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_sparkline=false');
+    const data = await response.json();
+    if (data.bitcoin) {
+      return {
+        price: data.bitcoin.usd,
+        change24h: data.bitcoin.usd_24h_change || 0,
+        dominance: 50, 
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching BTC data:', error);
+  }
+  return null;
+}
+
+async function fetchFearGreedIndex(): Promise<{ value: number; classification: string } | null> {
+  try {
+    const response = await fetch('https://api.alternative.me/fng/');
+    const data = await response.json();
+    if (data.data && data.data[0]) {
+      const value = parseInt(data.data[0].value);
+      let classification = 'Neutral';
+      if (value <= 25) classification = 'Extreme Fear';
+      else if (value <= 45) classification = 'Fear';
+      else if (value <= 55) classification = 'Neutral';
+      else if (value <= 75) classification = 'Greed';
+      else classification = 'Extreme Greed';
+      return { value, classification };
+    }
+  } catch (error) {
+    console.error('Error fetching Fear & Greed:', error);
+  }
+  return null;
+}
+
 const api = axios.create({
   baseURL: typeof window !== 'undefined' ? window.location.origin : '',
 });
@@ -93,7 +173,8 @@ export async function analyzeMarketWithAI(
   coin: Coin,
   candles: CandleData[],
   technicalFactors: TechnicalFactors,
-  timeframe: Timeframe
+  timeframe: Timeframe,
+  higherTimeframeData?: CandleData[]
 ): Promise<Partial<Signal>> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   
@@ -112,65 +193,110 @@ export async function analyzeMarketWithAI(
     const priceChange = currentPrice - prevPrice;
     const priceChangePercent = prevPrice > 0 ? (priceChange / prevPrice) * 100 : 0;
     
-    const recentCandles = candles.slice(-5);
+    const recentCandles = candles.slice(-50);
     const high24h = Math.max(...highs.slice(-24));
     const low24h = Math.min(...lows.slice(-24));
     const avgVolume = volumes.slice(-24).reduce((a, b) => a + b, 0) / 24;
     
+    const volumeAnalysis = analyzeVolume(volumes);
+    const priceStructure = detectPriceStructure(prices);
     const sentimentScore = calculateSentimentScore(technicalFactors, coin, priceChangePercent);
     const sentimentLabel = sentimentScore > 20 ? 'BULLISH' : sentimentScore < -20 ? 'BEARISH' : 'NEUTRAL';
     
     const supportLevels = findSupportLevels(lows);
     const resistanceLevels = findResistanceLevels(highs);
 
+    const [btcData, fearGreedData] = await Promise.all([
+      fetchBTCData(),
+      fetchFearGreedIndex(),
+    ]);
+
+    let higherTimeframeAnalysis = '';
+    if (higherTimeframeData && higherTimeframeData.length > 0) {
+      const htPrices = higherTimeframeData.map(c => c.close);
+      const htTrend = htPrices[htPrices.length - 1] > htPrices[0] ? 'BULLISH' : 'BEARISH';
+      const htCurrent = htPrices[htPrices.length - 1];
+      const htStart = htPrices[0];
+      const htChange = htStart > 0 ? ((htCurrent - htStart) / htStart * 100).toFixed(2) : '0';
+      higherTimeframeAnalysis = `
+HIGHER TIMEFRAME ANALYSIS (${timeframe === '1H' ? '4H' : '1D'}):
+- Trend: ${htTrend}
+- Change: ${htChange}%
+- Price: $${formatPrice(htCurrent)}`;
+    }
+
     const userMessage = `Analyze ${coin.symbol}/USDT on ${timeframe} timeframe and provide a trading signal.
 
-CURRENT MARKET DATA:
-- Symbol: ${coin.symbol}
-- Name: ${coin.name}
-- Current Price: $${formatPrice(currentPrice)}
-- 24h High: $${formatPrice(high24h)}
-- 24h Low: $${formatPrice(low24h)}
-- 24h Change: ${formatPercentage(coin.change24h)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}% from previous candle)
-- 7d Change: ${formatPercentage(coin.change7d)}
-- Market Cap: $${(coin.marketCap / 1e9).toFixed(2)}B
-- 24h Volume: $${(coin.volume24h / 1e9).toFixed(2)}B
-- Avg Volume (24h): $${(avgVolume * currentPrice / 1e9).toFixed(2)}B
-- Rank: #${coin.rank}
+=== CURRENT MARKET DATA ===
+Symbol: ${coin.symbol}
+Name: ${coin.name}
+Current Price: $${formatPrice(currentPrice)}
+24h High: $${formatPrice(high24h)}
+24h Low: $${formatPrice(low24h)}
+24h Change: ${formatPercentage(coin.change24h)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}% from previous)
+7d Change: ${formatPercentage(coin.change7d)}
+Market Cap: $${(coin.marketCap / 1e9).toFixed(2)}B
+24h Volume: $${(coin.volume24h / 1e9).toFixed(2)}B
+Rank: #${coin.rank}
 
-RECENT PRICE ACTION (Last 5 candles):
-${recentCandles.map((c, i) => `- Candle ${i+1}: O: $${formatPrice(c.open)}, H: $${formatPrice(c.high)}, L: $${formatPrice(c.low)}, C: $${formatPrice(c.close)}`).join('\n')}
+=== PRICE STRUCTURE ===
+Current Position: ${priceStructure}
+Price Range (20 candles): High $${formatPrice(Math.max(...prices.slice(-20)))}, Low $${formatPrice(Math.min(...prices.slice(-20)))}
 
-TECHNICAL INDICATORS (${timeframe} timeframe):
-- RSI (14): ${technicalFactors.rsi.toFixed(2)} - Signal: ${technicalFactors.rsiSignal}
-- MACD Line: ${technicalFactors.macd.macd.toFixed(4)}, Signal Line: ${technicalFactors.macd.signal.toFixed(4)}, Histogram: ${technicalFactors.macd.histogram.toFixed(4)}
-- Bollinger Bands: Upper: $${formatPrice(technicalFactors.bollingerBands.upper)}, Middle: $${formatPrice(technicalFactors.bollingerBands.middle)}, Lower: $${formatPrice(technicalFactors.bollingerBands.lower)}
-- SMA 20: $${formatPrice(technicalFactors.movingAverages.sma20)}
-- SMA 50: $${formatPrice(technicalFactors.movingAverages.sma50)}
-- SMA 200: $${formatPrice(technicalFactors.movingAverages.sma200)}
-- Price Trend: ${technicalFactors.trend}
-- Moving Average Trend: ${technicalFactors.movingAverages.trend}
+=== RECENT PRICE ACTION (Last 10 candles) ===
+${recentCandles.slice(-10).map((c, i) => `Candle ${i+1}: O: $${formatPrice(c.open)}, H: $${formatPrice(c.high)}, L: $${formatPrice(c.low)}, C: $${formatPrice(c.close)}, V: ${c.volume.toFixed(0)}`).join('\n')}
 
-KEY LEVELS:
-- Support Levels: $${supportLevels.map(formatPrice).join(', ')}
-- Resistance Levels: $${resistanceLevels.map(formatPrice).join(', ')}
+=== VOLUME ANALYSIS ===
+Volume Trend: ${volumeAnalysis.trend.toUpperCase()}
+Current Volume: ${volumeAnalysis.currentVolume.toFixed(0)} (${(volumeAnalysis.volumeRatio * 100).toFixed(0)}% of average)
+Avg Volume (20 periods): ${volumeAnalysis.avgVolume.toFixed(0)}
+Volume Signal: ${volumeAnalysis.trend === 'increasing' ? 'High volume confirms move' : volumeAnalysis.trend === 'decreasing' ? 'Low volume, weak move' : 'Normal volume'}
 
-MARKET SENTIMENT:
-- Overall Sentiment: ${sentimentLabel} (Score: ${sentimentScore})
-- RSI Sentiment: ${technicalFactors.rsiSignal}
-- Trend Sentiment: ${technicalFactors.trend}
-- Volume Analysis: ${volumes[volumes.length-1] > avgVolume * 1.5 ? 'High volume' : volumes[volumes.length-1] < avgVolume * 0.5 ? 'Low volume' : 'Normal volume'}
+=== TECHNICAL INDICATORS (${timeframe} timeframe) ===
+RSI (14): ${technicalFactors.rsi.toFixed(2)} - Signal: ${technicalFactors.rsiSignal}
+MACD: Line: ${technicalFactors.macd.macd.toFixed(4)}, Signal: ${technicalFactors.macd.signal.toFixed(4)}, Histogram: ${technicalFactors.macd.histogram.toFixed(4)}
+Bollinger Bands: Upper: $${formatPrice(technicalFactors.bollingerBands.upper)}, Middle: $${formatPrice(technicalFactors.bollingerBands.middle)}, Lower: $${formatPrice(technicalFactors.bollingerBands.lower)}
+SMA 20: $${formatPrice(technicalFactors.movingAverages.sma20)}
+SMA 50: $${formatPrice(technicalFactors.movingAverages.sma50)}
+SMA 200: $${formatPrice(technicalFactors.movingAverages.sma200)}
+Price Trend: ${technicalFactors.trend.toUpperCase()}
+MA Trend: ${technicalFactors.movingAverages.trend.toUpperCase()}
 
-Based on the above data, provide your trading recommendation with:
-1. Signal: BUY, SELL, or HOLD
-2. Confidence level (0-100)
-3. Entry Price (recommend at current price or slight discount/premium)
-4. Stop Loss (calculate 2-5% below entry for BUY, above for SELL)
-5. Take Profit (calculate at least 1.5x the risk distance)
-6. Risk/Reward Ratio
-7. Detailed reasoning
-8. Key factors supporting your decision
-9. Risk level: low, medium, or high
+=== KEY LEVELS ===
+Support Levels: $${supportLevels.map(formatPrice).join(', ')}
+Resistance Levels: $${resistanceLevels.map(formatPrice).join(', ')}
+
+=== MARKET SENTIMENT ===
+Overall Sentiment: ${sentimentLabel} (Score: ${sentimentScore})
+RSI Sentiment: ${technicalFactors.rsiSignal.toUpperCase()}
+Trend Sentiment: ${technicalFactors.trend.toUpperCase()}
+${fearGreedData ? `Fear & Greed Index: ${fearGreedData.value} (${fearGreedData.classification})` : 'Fear & Greed Index: Not available'}
+
+=== BTC CORRELATION ===
+${btcData ? `BTC Price: $${formatPrice(btcData.price)}
+BTC 24h Change: ${formatPercentage(btcData.change24h)}
+${coin.symbol} vs BTC: ${coin.change24h > btcData.change24h ? `${coin.symbol} outperforming BTC` : coin.change24h < btcData.change24h ? `${coin.symbol} underperforming BTC` : 'Moving in line with BTC'}` : 'BTC data not available'}
+
+${higherTimeframeAnalysis}
+
+=== ANALYSIS REQUIREMENTS ===
+Based on all the data above, provide your trading recommendation.
+
+1. Signal: BUY (if strong bullish setup), SELL (if strong bearish setup), HOLD (if unclear or conflicting signals)
+2. Confidence: 0-100 (higher only if multiple factors align)
+3. Entry Price: Current price or slight discount/premium
+4. Stop Loss: 2-5% below entry for BUY, above for SELL
+5. Take Profit: At least 1.5x the risk distance
+6. Risk/Reward Ratio: Minimum 1.5
+7. Reasoning: Detailed explanation with specific references to the data
+8. Key Factors: 3-5 most important factors
+9. Risk Level: low/medium/high based on setup quality
+
+IMPORTANT: Consider ALL factors together. A signal is valid only when:
+- Multiple indicators align (RSI, MACD, Trend)
+- Volume confirms the move
+- Price is near support (for BUY) or resistance (for SELL)
+- Higher timeframe trend agrees (if available)
 
 Return ONLY valid JSON without any additional text.`;
 

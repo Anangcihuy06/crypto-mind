@@ -1,9 +1,9 @@
-import { call, put, select, takeLatest } from 'redux-saga/effects';
+import { call, put, select, takeLatest, all } from 'redux-saga/effects';
 import { setCurrentSignal, setTechnicalFactors, setAnalyzing, setError } from '@/store/slices/signalSlice';
 import { analyzeMarketWithAI, calculateTechnicalFactors } from '@/services/claude';
 import { fetchKlines } from '@/services/binance';
 import type { RootState } from '@/store';
-import type { Signal, Coin, Timeframe } from '@/types';
+import type { Signal, Coin, Timeframe, CandleData } from '@/types';
 import { generateId } from '@/utils/formatters';
 import { TIMEFRAME_INTERVALS } from '@/utils/constants';
 
@@ -15,6 +15,12 @@ interface AnalyzeAction {
   };
 }
 
+function getHigherTimeframe(timeframe: Timeframe): Timeframe | null {
+  if (timeframe === '1H') return '4H';
+  if (timeframe === '4H') return '1D';
+  return null;
+}
+
 function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
   const { coin, timeframe } = action.payload;
   
@@ -23,9 +29,13 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
   
   try {
     const symbol = `${coin.symbol}/USDT`;
-    const interval = TIMEFRAME_INTERVALS[timeframe];
     
-    const candles = yield call(fetchKlines, symbol, timeframe, 200);
+    const [candles, higherTimeframeCandles] = yield all([
+      call(fetchKlines, symbol, timeframe, 200),
+      getHigherTimeframe(timeframe) 
+        ? call(fetchKlines, symbol, getHigherTimeframe(timeframe)!, 100)
+        : call(Promise.resolve, null)
+    ]);
     
     if (!candles || candles.length === 0) {
       throw new Error('No candle data available');
@@ -34,7 +44,14 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
     const technicalFactors = calculateTechnicalFactors(candles, coin);
     yield put(setTechnicalFactors(technicalFactors));
     
-    const aiAnalysis = yield call(analyzeMarketWithAI, coin, candles, technicalFactors, timeframe);
+    const aiAnalysis = yield call(
+      analyzeMarketWithAI, 
+      coin, 
+      candles, 
+      technicalFactors, 
+      timeframe,
+      higherTimeframeCandles || undefined
+    );
     
     const signal: Signal = {
       id: generateId(),
