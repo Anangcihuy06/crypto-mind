@@ -1,21 +1,26 @@
 'use client';
 
-import { useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, ArrowDown, ArrowUp, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/Layout';
 import { PriceChart } from '@/components/chart/PriceChart';
 import { OrderForm } from '@/components/trading/OrderForm';
 import { PositionsList } from '@/components/trading/PositionsList';
+import { AISignalCard } from '@/components/dashboard/AISignalCard';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSelectedCoin } from '@/store/slices/marketSlice';
-import { formatPrice, formatPercentage } from '@/utils/formatters';
+import { formatPrice, formatPercentage, formatDate } from '@/utils/formatters';
 import { clsx } from 'clsx';
+import type { SignalType } from '@/types';
 
 export default function TradingPage() {
   const dispatch = useAppDispatch();
   const { coins, selectedCoin, prices } = useAppSelector((state) => state.market);
   const { paperBalance, positions, totalPnL, totalPnLPercentage } = useAppSelector((state) => state.portfolio);
-
+  const { history } = useAppSelector((state) => state.signals);
+  
+  const [filterType, setFilterType] = useState<SignalType | 'all'>('all');
+  
   useEffect(() => {
     if (coins.length === 0) {
       dispatch({ type: 'market/fetchMarketData' });
@@ -27,6 +32,16 @@ export default function TradingPage() {
 
   const totalPositionsValue = positions.reduce((acc, pos) => acc + pos.value, 0);
   const totalValue = paperBalance + totalPositionsValue;
+
+  const filteredHistory = history
+    .filter(signal => filterType === 'all' || signal.type === filterType)
+    .slice(0, 15);
+
+  const getSignalColor = (type: SignalType) => {
+    if (type === 'BUY') return 'text-[#00d26a] bg-[#00d26a]/10';
+    if (type === 'SELL') return 'text-[#ff3b30] bg-[#ff3b30]/10';
+    return 'text-[#fbbf24] bg-[#fbbf24]/10';
+  };
 
   return (
     <DashboardLayout>
@@ -93,6 +108,54 @@ export default function TradingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3 space-y-6">
             <PriceChart />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <AISignalCard />
+              
+              <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Signal History</h3>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value as SignalType | 'all')}
+                    className="bg-[#1a1a24] border border-[#2d2d3a] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"
+                  >
+                    <option value="all">All</option>
+                    <option value="BUY">BUY</option>
+                    <option value="SELL">SELL</option>
+                    <option value="HOLD">HOLD</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                  {filteredHistory.length === 0 ? (
+                    <p className="text-[#64748b] text-center py-4">No signals yet</p>
+                  ) : (
+                    filteredHistory.map((signal) => (
+                      <div
+                        key={signal.id}
+                        className="bg-[#1a1a24] p-3 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium">{signal.symbol}</span>
+                          <div className={clsx(
+                            'px-2 py-0.5 rounded text-xs font-medium',
+                            getSignalColor(signal.type)
+                          )}>
+                            {signal.type}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-[#64748b]">
+                          <span>{signal.timeframe}</span>
+                          <span>{signal.confidence}%</span>
+                          <span>{formatDate(signal.createdAt)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
             
             {selectedCoinData && (
               <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-6">
