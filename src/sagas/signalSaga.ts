@@ -43,10 +43,15 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
       confidence: aiAnalysis.confidence || 50,
       timeframe,
       price: coin.price,
+      entryPrice: aiAnalysis.entryPrice,
+      stopLoss: aiAnalysis.stopLoss,
+      takeProfit: aiAnalysis.takeProfit,
+      riskRewardRatio: aiAnalysis.riskRewardRatio,
       reasoning: aiAnalysis.reasoning || 'Analysis based on technical factors',
       technicalFactors,
       aiAnalysis: aiAnalysis.aiAnalysis,
       sources: aiAnalysis.sources || ['Technical Analysis'],
+      model: aiAnalysis.model,
       createdAt: Date.now(),
     };
     

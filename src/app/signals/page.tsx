@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Brain, TrendingUp, TrendingDown, Minus, Filter, RefreshCw, Loader2 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { TrendingUp, TrendingDown, Minus, Filter, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/Layout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSelectedCoin } from '@/store/slices/marketSlice';
-import { formatPrice, formatPercentage, formatDate } from '@/utils/formatters';
+import { formatPrice, formatDate } from '@/utils/formatters';
 import { clsx } from 'clsx';
 import type { Timeframe, SignalType } from '@/types';
 
@@ -17,6 +17,10 @@ export default function SignalsPage() {
   const [filterSymbol, setFilterSymbol] = useState<string>('all');
   const [filterType, setFilterType] = useState<SignalType | 'all'>('all');
   const [filterTimeframe, setFilterTimeframe] = useState<Timeframe | 'all'>('all');
+  
+  const prevCoinRef = useRef(selectedCoin);
+  const prevTimeframeRef = useRef(selectedTimeframe);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     if (coins.length === 0) {
@@ -24,12 +28,26 @@ export default function SignalsPage() {
     }
   }, [dispatch, coins.length]);
 
-  const handleAnalyze = () => {
+  useEffect(() => {
+    if (coins.length === 0) return;
+    
     const coin = coins.find(c => c.symbol === selectedCoin);
-    if (coin) {
+    if (!coin) return;
+
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      prevCoinRef.current = selectedCoin;
+      prevTimeframeRef.current = selectedTimeframe;
+      dispatch({ type: 'signals/analyze', payload: { coin, timeframe: selectedTimeframe } });
+      return;
+    }
+
+    if (selectedCoin !== prevCoinRef.current || selectedTimeframe !== prevTimeframeRef.current) {
+      prevCoinRef.current = selectedCoin;
+      prevTimeframeRef.current = selectedTimeframe;
       dispatch({ type: 'signals/analyze', payload: { coin, timeframe: selectedTimeframe } });
     }
-  };
+  }, [selectedCoin, selectedTimeframe, coins, dispatch]);
 
   const filteredHistory = history.filter(signal => {
     if (filterSymbol !== 'all' && signal.symbol !== filterSymbol) return false;
@@ -65,9 +83,9 @@ export default function SignalsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-6">
-              <h3 className="text-lg font-semibold mb-4">Generate New Signal</h3>
+              <h3 className="text-lg font-semibold mb-4">Current Signal</h3>
               
-              <div className="flex flex-wrap gap-4 mb-4">
+              <div className="flex flex-wrap gap-4 mb-4 items-center">
                 <select
                   value={selectedCoin}
                   onChange={(e) => dispatch(setSelectedCoin(e.target.value))}
@@ -97,23 +115,12 @@ export default function SignalsPage() {
                   ))}
                 </div>
 
-                <button
-                  onClick={handleAnalyze}
-                  disabled={analyzing}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#8b5cf6] rounded-lg hover:bg-[#7c3aed] transition-colors disabled:opacity-50"
-                >
-                  {analyzing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="w-4 h-4" />
-                      Analyze
-                    </>
-                  )}
-                </button>
+                {analyzing && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-[#8b5cf6]/20 rounded-lg">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#8b5cf6]" />
+                    <span className="text-sm text-[#8b5cf6]">Analyzing...</span>
+                  </div>
+                )}
               </div>
 
               {current && (
@@ -128,7 +135,12 @@ export default function SignalsPage() {
                       <p className="text-xl font-bold text-[#8b5cf6]">{current.confidence}%</p>
                     </div>
                   </div>
-                  <p className="text-sm opacity-80">{current.reasoning}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs px-2 py-1 bg-white/10 rounded-full">
+                      🤖 {current.model || 'AI Model'}
+                    </span>
+                  </div>
+                  <p className="text-sm opacity-80 mt-2">{current.reasoning}</p>
                 </div>
               )}
 

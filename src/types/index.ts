@@ -93,6 +93,7 @@ export interface Signal {
   technicalFactors: TechnicalFactors;
   aiAnalysis?: string;
   sources: string[];
+  model?: string;
   createdAt: number;
 }
 

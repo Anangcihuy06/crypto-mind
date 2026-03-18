@@ -11,11 +11,31 @@
 | Framework | Next.js 14 (App Router) |
 | Language | TypeScript |
 | State Management | Redux Toolkit + Redux Saga |
-| Styling | Tailwind CSS |
+| Styling | Tailwind CSS v4 |
 | Charts | TradingView Lightweight Charts |
 | AI Analysis | Claude Sonnet 4.6 (Anthropic) |
 | Market Data | CoinMarketCap API |
 | Real-time | Binance WebSocket |
+
+---
+
+## Commands
+
+### Development
+```bash
+npm run dev        # Start development server on http://localhost:3000
+npm run build      # Production build
+npm run start      # Start production server
+npm run lint       # Run ESLint
+```
+
+### Testing
+This project does **not** have a test framework configured. If adding tests:
+- Use Vitest or Jest with React Testing Library
+- Run single test: `npm test -- --testPathPattern="filename"`
+- Or with Vitest: `npx vitest run filename.spec.ts`
+
+---
 
 ## Project Structure
 
@@ -32,55 +52,180 @@ crypto-market/
 │   │   └── globals.css
 │   │
 │   ├── components/
-│   │   ├── layout/
-│   │   │   ├── Header.tsx
-│   │   │   ├── Sidebar.tsx
-│   │   │   └── Layout.tsx
-│   │   ├── dashboard/
-│   │   │   ├── PortfolioCard.tsx
-│   │   │   └── AISignalCard.tsx
-│   │   ├── chart/
-│   │   │   └── PriceChart.tsx
-│   │   ├── trading/
-│   │   │   ├── OrderForm.tsx
-│   │   │   └── PositionsList.tsx
-│   │   └── ReduxProvider.tsx
+│   │   ├── layout/           # Header, Sidebar, Layout
+│   │   ├── dashboard/         # PortfolioCard, AISignalCard
+│   │   ├── chart/            # PriceChart
+│   │   └── trading/          # OrderForm, PositionsList
 │   │
-│   ├── store/
-│   │   ├── index.ts                 → Redux store config
-│   │   ├── hooks.ts                → Typed hooks
-│   │   └── slices/
-│   │       ├── marketSlice.ts
-│   │       ├── portfolioSlice.ts
-│   │       ├── signalSlice.ts
-│   │       ├── tradingSlice.ts
-│   │       └── settingsSlice.ts
+│   ├── store/                # Redux Toolkit
+│   │   ├── slices/          # Redux slices
+│   │   ├── hooks.ts         # Typed hooks
+│   │   └── index.ts         # Store config
 │   │
-│   ├── sagas/
-│   │   ├── rootSaga.ts
-│   │   ├── marketSaga.ts
-│   │   ├── tradingSaga.ts
-│   │   └── signalSaga.ts
-│   │
-│   ├── services/
-│   │   ├── coinMarketCap.ts
-│   │   ├── binance.ts              → Includes WebSocket
-│   │   └── claude.ts
-│   │
-│   ├── utils/
-│   │   ├── constants.ts
-│   │   ├── formatters.ts
-│   │   └── technicalAnalysis.ts
-│   │
-│   └── types/
-│       └── index.ts
+│   ├── sagas/               # Redux Saga
+│   ├── services/            # API services
+│   ├── utils/               # Utilities
+│   └── types/               # TypeScript types
 │
-├── .env.local                      → API Keys (secret)
-├── .env.example                    → Template
+├── .env.local               → API Keys (secret)
+├── .env.example             → Template
 ├── package.json
-├── tailwind.config.ts
 └── tsconfig.json
 ```
+
+---
+
+## Code Style Guidelines
+
+### TypeScript
+- **Strict mode enabled** in `tsconfig.json`
+- Always use explicit types for function parameters and return values
+- Use `type` for unions/aliases, `interface` for object shapes
+- Use path alias `@/*` for imports (configured in tsconfig)
+
+```typescript
+// Good
+function fetchData(symbol: string): Promise<Coin[]> { ... }
+
+// Bad
+function fetchData(symbol) { ... }
+```
+
+### Imports
+```typescript
+// External libraries
+import { useState, useEffect } from 'react';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+// Path alias (use @/ for src/)
+import { setCoins } from '@/store/slices/marketSlice';
+import type { Coin, CandleData } from '@/types';
+
+// Relative imports when in same directory
+import { formatPrice } from './formatters';
+```
+
+### Components
+- Use function components with explicit return types
+- Use `'use client'` directive for client-side components
+- Use `clsx` and `tailwind-merge` for conditional classes
+
+```typescript
+'use client';
+
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+interface Props {
+  className?: string;
+  children: React.ReactNode;
+}
+
+export function Component({ className, children }: Props) {
+  return (
+    <div className={twMerge(clsx('base-classes', className))}>
+      {children}
+    </div>
+  );
+}
+```
+
+### Redux Toolkit + Saga
+- Slices: Use `createSlice` with immer enabled
+- Use typed hooks (`useAppSelector`, `useAppDispatch` from `@/store/hooks`)
+- Sagas: Use generator functions with proper typing
+
+```typescript
+// Slice
+const marketSlice = createSlice({
+  name: 'market',
+  initialState,
+  reducers: {
+    setCoins(state, action: PayloadAction<Coin[]>) {
+      state.coins = action.payload;
+    },
+  },
+});
+
+// Saga
+function* fetchDataSaga(): Generator<any, void, any> {
+  try {
+    const data = yield call(fetchApi);
+    yield put(setCoins(data));
+  } catch (error: any) {
+    yield put(setError(error.message || 'Failed to fetch'));
+  }
+}
+```
+
+### Naming Conventions
+| Type | Convention | Example |
+|------|------------|---------|
+| Components | PascalCase | `AISignalCard` |
+| Functions | camelCase | `formatPrice` |
+| Variables | camelCase | `selectedCoin` |
+| Constants | UPPER_SNAKE | `TIMEFRAME_INTERVALS` |
+| Types/Interfaces | PascalCase | `Coin`, `CandleData` |
+| React Props | camelCase | `className`, `onClick` |
+| Files | kebab-case | `market-slice.ts` |
+
+### Error Handling
+- Always use try/catch for async operations
+- Provide fallback error messages
+- Handle errors in Redux with `setError` action
+
+```typescript
+// Good
+try {
+  const data = await fetchApi();
+  return data;
+} catch (error: any) {
+  console.error('Error fetching data:', error);
+  throw new Error(error.message || 'Failed to fetch data');
+}
+
+// API Routes
+try {
+  const response = await fetch(url);
+  if (!response.ok) {
+    return NextResponse.json({ error: 'Failed' }, { status: response.status });
+  }
+  return NextResponse.json(await response.json());
+} catch (error: any) {
+  return NextResponse.json({ error: error.message }, { status: 500 });
+}
+```
+
+### Tailwind CSS v4
+- Uses `@theme` directive for custom colors in `globals.css`
+- Use CSS variables for theme colors
+
+```css
+/* globals.css */
+@theme {
+  --color-bg-primary: #0a0a0f;
+  --color-accent-green: #00d26a;
+}
+
+/* Component */
+<div className="bg-bg-primary text-accent-green">...</div>
+```
+
+### Dark Theme Colors Reference
+| Variable | Hex | Usage |
+|----------|-----|-------|
+| `--color-bg-primary` | `#0a0a0f` | Main background |
+| `--color-bg-secondary` | `#12121a` | Cards |
+| `--color-bg-tertiary` | `#1a1a24` | Nested elements |
+| `--color-border` | `#2d2d3a` | Borders |
+| `--color-accent-green` | `#00d26a` | Buy/Profit |
+| `--color-accent-red` | `#ff3b30` | Sell/Loss |
+| `--color-accent-purple` | `#8b5cf6` | AI elements |
+| `--color-text-primary` | `#f8fafc` | Main text |
+| `--color-text-secondary` | `#94a3b8` | Secondary text |
+| `--color-text-muted` | `#64748b` | Muted text |
+
+---
 
 ## Key Features
 
@@ -117,6 +262,8 @@ crypto-market/
 - Real-time chart updates
 - Signal cards dengan confidence
 
+---
+
 ## API Integration
 
 ### CoinMarketCap API
@@ -141,6 +288,8 @@ POST /api/analyze
 - AI-powered market analysis
 - Signal generation dengan confidence
 
+---
+
 ## Environment Variables
 
 ```env
@@ -159,6 +308,8 @@ NEXT_PUBLIC_APP_NAME=CryptoMind
 NEXT_PUBLIC_PAPER_BALANCE=10000
 ```
 
+---
+
 ## Running the Application
 
 ```bash
@@ -170,9 +321,14 @@ npm run build
 
 # Production server
 npm run start
+
+# Lint
+npm run lint
 ```
 
 App akan running di `http://localhost:3000`
+
+---
 
 ## Key Files Reference
 
@@ -238,6 +394,8 @@ export const binanceWS = new BinanceWebSocket();
 - `detectTrend(candles)`
 - `findSupportResistance(candles)`
 
+---
+
 ## Known Issues & Solutions
 
 ### 1. CORS Error
@@ -258,6 +416,8 @@ export const binanceWS = new BinanceWebSocket();
 
 **Solution**: Implemented Binance WebSocket connection with auto-reconnect
 
+---
+
 ## Future Enhancements
 
 1. **Multiple AI Models**: GPT-5, Gemini 2.5 Pro
@@ -267,6 +427,8 @@ export const binanceWS = new BinanceWebSocket();
 5. **Backtesting**: Historical strategy testing
 6. **Portfolio Analytics**: Risk management, position sizing
 
+---
+
 ## Notes
 
 - Paper trading mode: $10,000 virtual balance
@@ -274,91 +436,3 @@ export const binanceWS = new BinanceWebSocket();
 - CMC free tier: 300 requests/day
 - Binance WebSocket: unlimited & free
 - Always use human oversight untuk trading decisions
-
----
-
-## Feature: AI Price Targets (Entry, Stop Loss, Take Profit)
-
-### Overview
-Ditambahkan fitur price targets pada signal AI yang mencakup:
-- **Entry Price**: Harga masuk yang disarankan
-- **Stop Loss**: Harga untuk cut loss
-- **Take Profit**: Harga untuk take profit
-- **Risk/Reward Ratio**: Rasio risk vs reward
-
-### Implementation
-
-#### 1. TypeScript Interface Update
-```typescript
-// src/types/index.ts
-export interface Signal {
-  // ... existing fields
-  entryPrice?: number;
-  stopLoss?: number;
-  takeProfit?: number;
-  riskRewardRatio?: number;
-}
-```
-
-#### 2. AI Prompt Update
-```typescript
-// src/services/claude.ts
-const SYSTEM_PROMPT = `...
-Provide your analysis in JSON format:
-{
-  "signal": "BUY" | "SELL" | "HOLD",
-  "confidence": number (0-100),
-  "entryPrice": number,
-  "stopLoss": number,
-  "takeProfit": number,
-  "riskRewardRatio": number,
-  "reasoning": "string",
-  "keyFactors": ["string"],
-  "riskLevel": "low" | "medium" | "high"
-}`;
-```
-
-#### 3. Fallback Calculation (Tanpa AI)
-Jika AI tidak provide price targets, menggunakan Bollinger Bands:
-```typescript
-if (type === 'BUY') {
-  entryPrice = currentPrice;
-  stopLoss = bollingerBands.lower * 0.98;  // 2% below lower BB
-  takeProfit = bollingerBands.upper * 1.02; // 2% above upper BB
-}
-```
-
-#### 4. UI Components Update
-- `AISignalCard.tsx`: Display price targets dengan format yang jelas
-- `SignalsPage.tsx`: Price targets di signal generation
-- `HistoryPage.tsx`: Price targets di signal history
-
-### Contoh Output Signal dengan Price Targets:
-```json
-{
-  "signal": "BUY",
-  "confidence": 78,
-  "entryPrice": 67500,
-  "stopLoss": 66500,
-  "takeProfit": 70000,
-  "riskRewardRatio": 2.5,
-  "reasoning": "Multiple bullish factors align...",
-  "keyFactors": ["MACD crossover", "RSI oversold"]
-}
-```
-
-### UI Display
-```
-┌─────────────────────────────────────┐
-│  🔷 BUY                              │
-│  Confidence: 78%                    │
-│                                     │
-│  Price Targets:                     │
-│  ┌────────────┬────────────┐       │
-│  │ Entry      │ $67,500    │       │
-│  │ Stop Loss  │ $66,500    │       │
-│  │ Take Profit│ $70,000    │       │
-│  │ R:R        │ 1:2.5      │       │
-│  └────────────┴────────────┘       │
-└─────────────────────────────────────┘
-```

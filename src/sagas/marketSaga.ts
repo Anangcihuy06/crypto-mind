@@ -3,6 +3,7 @@ import { fetchMarketData } from '@/services/coinMarketCap';
 import { fetchKlines, binanceWS, TickerData } from '@/services/binance';
 import { setCoins, setLoading, setCandles, setCandlesLoading, setError, setSelectedCoin, setSelectedTimeframe, updatePrice } from '@/store/slices/marketSlice';
 import { updatePositionsPrices } from '@/store/slices/portfolioSlice';
+import { store } from '@/store';
 import type { RootState } from '@/store';
 import type { Coin } from '@/types';
 
@@ -58,15 +59,14 @@ function* connectWebSocketSaga(symbols: string[]): Generator<any, void, any> {
 
     symbols.forEach((symbol: string) => {
       binanceWS.subscribe(symbol, (data: TickerData) => {
-        updatePrice({
+        store.dispatch(updatePrice({
           symbol: data.symbol,
           price: data.price,
           change24h: data.change24h,
-        });
-        
-        updatePositionsPrices({
+        }));
+        store.dispatch(updatePositionsPrices({
           [data.symbol]: data.price,
-        });
+        }));
       });
     });
     
