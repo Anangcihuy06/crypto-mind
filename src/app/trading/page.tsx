@@ -123,8 +123,8 @@ export default function TradingPage() {
                 <AISignalCard />
               </div>
               
-              <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-4 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-4 h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-4 shrink-0">
                   <h3 className="text-lg font-semibold">Signal History</h3>
                   <div className="flex items-center gap-3">
                     {signalStats.total > 0 && (
@@ -148,7 +148,7 @@ export default function TradingPage() {
                   </div>
                 </div>
                 
-                <div className="space-y-2 flex-1 overflow-y-auto">
+                <div className="space-y-2 flex-1 overflow-y-auto min-h-0">
                   {filteredHistory.length === 0 ? (
                     <p className="text-[#64748b] text-center py-4">No signals yet</p>
                   ) : (

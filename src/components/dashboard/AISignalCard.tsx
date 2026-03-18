@@ -5,7 +5,7 @@ import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setCurrentSignal, setTechnicalFactors, setAnalyzing } from '@/store/slices/signalSlice';
 import { formatPrice, formatPercentage, formatDate } from '@/utils/formatters';
 import { clsx } from 'clsx';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function AISignalCard() {
   const dispatch = useAppDispatch();
@@ -13,20 +13,37 @@ export function AISignalCard() {
   const { selectedCoin, coins, selectedTimeframe } = useAppSelector((state) => state.market);
 
   const coin = coins.find((c) => c.symbol === selectedCoin);
+  
+  const prevCoinRef = useRef(selectedCoin);
+  const prevTimeframeRef = useRef(selectedTimeframe);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     if (!coin) return;
 
-    dispatch(setAnalyzing(true));
-    
-    const timeoutId = setTimeout(() => {
+    const timeframe = selectedTimeframe || '1H';
+
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      prevCoinRef.current = selectedCoin;
+      prevTimeframeRef.current = timeframe;
+      dispatch(setAnalyzing(true));
       dispatch({ 
         type: 'signals/analyze', 
-        payload: { coin, timeframe: selectedTimeframe } 
+        payload: { coin, timeframe } 
       });
-    }, 500);
+      return;
+    }
 
-    return () => clearTimeout(timeoutId);
+    if (selectedCoin !== prevCoinRef.current || timeframe !== prevTimeframeRef.current) {
+      prevCoinRef.current = selectedCoin;
+      prevTimeframeRef.current = timeframe;
+      dispatch(setAnalyzing(true));
+      dispatch({ 
+        type: 'signals/analyze', 
+        payload: { coin, timeframe } 
+      });
+    }
   }, [selectedCoin, selectedTimeframe, coin, dispatch]);
 
   const getSignalIcon = () => {
