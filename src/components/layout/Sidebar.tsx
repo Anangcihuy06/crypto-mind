@@ -22,7 +22,15 @@ export function Sidebar() {
     if (coins.length === 0) return;
 
     const STABLECOINS = ['USDT', 'USDC', 'DAI', 'USDe', 'BUSD', 'USDD', 'TUSD', 'USDP'];
-    const filteredCoins = coins.filter(c => !STABLECOINS.includes(c.symbol));
+    const filteredCoins = coins.filter(c => {
+      const symbol = c.symbol;
+      return (
+        !STABLECOINS.includes(symbol) &&
+        symbol.length >= 2 &&
+        symbol.length <= 10 &&
+        /^[A-Z]+$/.test(symbol)
+      );
+    });
     
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
@@ -31,11 +39,17 @@ export function Sidebar() {
     const connect = () => {
       if (ws?.readyState === WebSocket.OPEN) return;
       
-      const symbols = filteredCoins.slice(0, 20).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
+      const symbols = filteredCoins.slice(0, 15).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
       const wsUrl = `wss://stream.binance.com:9443/stream?streams=${symbols}`;
       
       console.log('Connecting WebSocket from Sidebar...', wsUrl);
-      ws = new WebSocket(wsUrl);
+      
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (err) {
+        console.error('WebSocket creation failed:', err);
+        return;
+      }
       
       ws.onopen = () => {
         console.log('WebSocket connected from Sidebar');
