@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { CandlestickSeries, createChart, Time } from 'lightweight-charts';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSelectedTimeframe } from '@/store/slices/marketSlice';
+import { klineWS, type KlineData } from '@/services/binance';
 import type { Timeframe } from '@/types';
+import { TIMEFRAME_INTERVALS } from '@/utils/constants';
 
 const timeframes: Timeframe[] = ['1H', '4H', '1D', '1W'];
 
@@ -12,11 +14,30 @@ export function PriceChart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const candleSeriesRef = useRef<any>(null);
+  const lastKlineRef = useRef<KlineData | null>(null);
   
   const dispatch = useAppDispatch();
   const { candles, selectedCoin, selectedTimeframe, candlesLoading } = useAppSelector(
     (state) => state.market
   );
+
+  const handleKlineUpdate = useCallback((data: KlineData) => {
+    if (!candleSeriesRef.current || !data) return;
+
+    const candleData = {
+      time: data.time as Time,
+      open: data.open,
+      high: data.high,
+      low: data.low,
+      close: data.close,
+    };
+
+    if (lastKlineRef.current && lastKlineRef.current.time === data.time) {
+      candleSeriesRef.current.update(candleData);
+    } else {
+      lastKlineRef.current = data;
+    }
+  }, []);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -74,24 +95,39 @@ export function PriceChart() {
   }, []);
 
   useEffect(() => {
-    if (!candleSeriesRef.current || candles.length === 0) return;
-
-    const chartData = candles.map((candle) => ({
-      time: candle.time as Time,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-    }));
-
-    candleSeriesRef.current.setData(chartData);
+    lastKlineRef.current = null;
     
-    if (chartRef.current) {
-      chartRef.current.timeScale().fitContent();
+    if (candleSeriesRef.current && candles.length > 0) {
+      const chartData = candles.map((candle) => ({
+        time: candle.time as Time,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      }));
+
+      candleSeriesRef.current.setData(chartData);
+      
+      if (chartRef.current) {
+        chartRef.current.timeScale().fitContent();
+      }
     }
   }, [candles]);
 
+  useEffect(() => {
+    if (!selectedCoin || !selectedTimeframe) return;
+
+    const interval = TIMEFRAME_INTERVALS[selectedTimeframe];
+    klineWS.connect(selectedCoin, interval);
+    klineWS.subscribe(selectedCoin, handleKlineUpdate);
+
+    return () => {
+      klineWS.unsubscribe(selectedCoin);
+    };
+  }, [selectedCoin, selectedTimeframe, handleKlineUpdate]);
+
   const handleTimeframeChange = (tf: Timeframe) => {
+    lastKlineRef.current = null;
     dispatch(setSelectedTimeframe(tf));
   };
 

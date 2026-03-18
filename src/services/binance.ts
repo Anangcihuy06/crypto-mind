@@ -91,7 +91,19 @@ export interface TickerData {
   volume: number;
 }
 
+export interface KlineData {
+  symbol: string;
+  timeframe: string;
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 type TickerCallback = (data: TickerData) => void;
+type KlineCallback = (data: KlineData) => void;
 
 class BinanceWebSocket {
   private ws: WebSocket | null = null;
@@ -197,5 +209,107 @@ class BinanceWebSocket {
 }
 
 export const binanceWS = new BinanceWebSocket();
+
+class KlineWebSocket {
+  private ws: WebSocket | null = null;
+  private subscriptions: Map<string, KlineCallback> = new Map();
+  private currentSymbol: string = '';
+  private currentTimeframe: string = '';
+  private reconnectTimeout: NodeJS.Timeout | null = null;
+
+  connect(symbol: string, timeframe: string) {
+    if (this.currentSymbol === symbol && this.currentTimeframe === timeframe && this.ws?.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    this.disconnect();
+    this.currentSymbol = symbol;
+    this.currentTimeframe = timeframe;
+
+    const stream = `${symbol.toLowerCase()}usdt@kline_${timeframe}`;
+    const wsUrl = `wss://stream.binance.com:9443/stream?streams=${stream}`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('Kline WebSocket connected:', stream);
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.data && message.data.k) {
+            const kline = message.data.k;
+            const data: KlineData = {
+              symbol: kline.s.replace('USDT', ''),
+              timeframe: kline.i,
+              time: Math.floor(kline.t / 1000),
+              open: parseFloat(kline.o),
+              high: parseFloat(kline.h),
+              low: parseFloat(kline.l),
+              close: parseFloat(kline.c),
+              volume: parseFloat(kline.v),
+            };
+
+            const callback = this.subscriptions.get(symbol);
+            if (callback) {
+              callback(data);
+            }
+          }
+        } catch (error) {
+          console.error('Error parsing kline message:', error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('Kline WebSocket error:', error);
+      };
+
+      this.ws.onclose = () => {
+        console.log('Kline WebSocket disconnected');
+        this.attemptReconnect();
+      };
+    } catch (error) {
+      console.error('Error creating Kline WebSocket:', error);
+      this.attemptReconnect();
+    }
+  }
+
+  private attemptReconnect() {
+    if (this.reconnectTimeout) return;
+    
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
+      if (this.currentSymbol && this.currentTimeframe) {
+        this.connect(this.currentSymbol, this.currentTimeframe);
+      }
+    }, 5000);
+  }
+
+  subscribe(symbol: string, callback: KlineCallback) {
+    this.subscriptions.set(symbol, callback);
+  }
+
+  unsubscribe(symbol: string) {
+    this.subscriptions.delete(symbol);
+  }
+
+  disconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.currentSymbol = '';
+    this.currentTimeframe = '';
+    this.subscriptions.clear();
+  }
+}
+
+export const klineWS = new KlineWebSocket();
 
 const BINANCE_BASE_URL = 'https://api.binance.com/api/v3';
