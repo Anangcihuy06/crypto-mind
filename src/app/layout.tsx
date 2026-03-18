@@ -24,16 +24,20 @@ export const metadata: Metadata = {
   authors: [{ name: 'CryptoMind' }],
   creator: 'CryptoMind',
   publisher: 'CryptoMind',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
     url: 'https://crypto-mind-virid.vercel.app',
     siteName: 'CryptoMind',
     title: 'CryptoMind - AI-Powered Crypto Trading Platform',
-    description: 'AI-powered cryptocurrency trading platform with real-time market analysis, technical indicators, and automated trading signals.',
+    description: 'AI-powered cryptocurrency trading platform with real-time market analysis, technical indicators, automated trading signals, and paper trading.',
     images: [
       {
-        url: '/og-image.png',
+        url: 'https://crypto-mind-virid.vercel.app/og-image.png',
         width: 1200,
         height: 630,
         alt: 'CryptoMind - AI Crypto Trading',
@@ -45,7 +49,7 @@ export const metadata: Metadata = {
     title: 'CryptoMind - AI-Powered Crypto Trading Platform',
     description: 'AI-powered cryptocurrency trading platform with real-time market analysis, technical indicators, and automated trading signals.',
     creator: '@cryptomind',
-    images: ['/og-image.png'],
+    images: ['https://crypto-mind-virid.vercel.app/og-image.png'],
   },
   robots: {
     index: true,
