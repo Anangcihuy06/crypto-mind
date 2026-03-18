@@ -118,81 +118,79 @@ export default function TradingPage() {
           <div className="lg:col-span-3 space-y-6">
             <PriceChart />
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-              <div className="h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] overflow-hidden h-full">
                 <AISignalCard />
               </div>
               
-              <div className="h-full flex flex-col">
-                <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-4 flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Signal History</h3>
-                    <div className="flex items-center gap-3">
-                      {signalStats.total > 0 && (
-                        <span className="text-xs text-[#64748b]">
-                          <span className={signalStats.winRate >= 50 ? 'text-[#00d26a]' : 'text-[#ff3b30]'}>
-                            {signalStats.winRate}%
-                          </span>
-                          {' '}({signalStats.wins}W/{signalStats.losses}L/{signalStats.breakeven}B)
+              <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] p-4 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Signal History</h3>
+                  <div className="flex items-center gap-3">
+                    {signalStats.total > 0 && (
+                      <span className="text-xs text-[#64748b]">
+                        <span className={signalStats.winRate >= 50 ? 'text-[#00d26a]' : 'text-[#ff3b30]'}>
+                          {signalStats.winRate}%
                         </span>
-                      )}
-                      <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value as SignalType | 'all')}
-                        className="bg-[#1a1a24] border border-[#2d2d3a] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"
-                      >
-                        <option value="all">All</option>
-                        <option value="BUY">BUY</option>
-                        <option value="SELL">SELL</option>
-                        <option value="HOLD">HOLD</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2 flex-1 overflow-y-auto">
-                    {filteredHistory.length === 0 ? (
-                      <p className="text-[#64748b] text-center py-4">No signals yet</p>
-                    ) : (
-                      filteredHistory.map((signal) => (
-                        <div
-                          key={signal.id}
-                          className="bg-[#1a1a24] p-3 rounded-lg"
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{signal.symbol}</span>
-                              {signal.status === 'CLOSED' && (
-                                <span className={clsx(
-                                  'text-xs px-1.5 py-0.5 rounded',
-                                  signal.result === 'WIN' ? 'bg-[#00d26a]/20 text-[#00d26a]' :
-                                  signal.result === 'LOSS' ? 'bg-[#ff3b30]/20 text-[#ff3b30]' :
-                                  'bg-[#fbbf24]/20 text-[#fbbf24]'
-                                )}>
-                                  {signal.result}
-                                </span>
-                              )}
-                            </div>
-                            <div className={clsx(
-                              'px-2 py-0.5 rounded text-xs font-medium',
-                              getSignalColor(signal.type)
-                            )}>
-                              {signal.type}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-[#64748b]">
-                            <span>{signal.timeframe}</span>
-                            <span>{signal.confidence}%</span>
-                            <span>{formatDate(signal.createdAt)}</span>
-                          </div>
-                          {signal.status === 'PENDING' && (
-                            <div className="text-xs text-[#8b5cf6] mt-1">
-                              Pending evaluation
-                            </div>
-                          )}
-                        </div>
-                      ))
+                        {' '}({signalStats.wins}W/{signalStats.losses}L/{signalStats.breakeven}B)
+                      </span>
                     )}
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value as SignalType | 'all')}
+                      className="bg-[#1a1a24] border border-[#2d2d3a] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[#3b82f6]"
+                    >
+                      <option value="all">All</option>
+                      <option value="BUY">BUY</option>
+                      <option value="SELL">SELL</option>
+                      <option value="HOLD">HOLD</option>
+                    </select>
                   </div>
+                </div>
+                
+                <div className="space-y-2 flex-1 overflow-y-auto">
+                  {filteredHistory.length === 0 ? (
+                    <p className="text-[#64748b] text-center py-4">No signals yet</p>
+                  ) : (
+                    filteredHistory.map((signal) => (
+                      <div
+                        key={signal.id}
+                        className="bg-[#1a1a24] p-3 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{signal.symbol}</span>
+                            {signal.status === 'CLOSED' && (
+                              <span className={clsx(
+                                'text-xs px-1.5 py-0.5 rounded',
+                                signal.result === 'WIN' ? 'bg-[#00d26a]/20 text-[#00d26a]' :
+                                signal.result === 'LOSS' ? 'bg-[#ff3b30]/20 text-[#ff3b30]' :
+                                'bg-[#fbbf24]/20 text-[#fbbf24]'
+                              )}>
+                                {signal.result}
+                              </span>
+                            )}
+                          </div>
+                          <div className={clsx(
+                            'px-2 py-0.5 rounded text-xs font-medium',
+                            getSignalColor(signal.type)
+                          )}>
+                            {signal.type}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-[#64748b]">
+                          <span>{signal.timeframe}</span>
+                          <span>{signal.confidence}%</span>
+                          <span>{formatDate(signal.createdAt)}</span>
+                        </div>
+                        {signal.status === 'PENDING' && (
+                          <div className="text-xs text-[#8b5cf6] mt-1">
+                            Pending evaluation
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

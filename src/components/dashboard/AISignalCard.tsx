@@ -51,7 +51,7 @@ export function AISignalCard() {
   };
 
   return (
-    <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] overflow-hidden">
+    <div className="h-full flex flex-col">
       <div className="p-4 border-b border-[#2d2d3a] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-[#8b5cf6]" />
