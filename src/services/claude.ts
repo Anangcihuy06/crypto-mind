@@ -107,13 +107,13 @@ function detectPriceStructure(prices: number[]): string {
 
 async function fetchBTCData(): Promise<{ price: number; change24h: number; dominance: number } | null> {
   try {
-    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_sparkline=false');
+    const response = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');
     const data = await response.json();
-    if (data.bitcoin) {
+    if (data.symbol === 'BTCUSDT') {
       return {
-        price: data.bitcoin.usd,
-        change24h: data.bitcoin.usd_24h_change || 0,
-        dominance: 50, 
+        price: parseFloat(data.lastPrice) || 0,
+        change24h: parseFloat(data.priceChangePercent) || 0,
+        dominance: 50,
       };
     }
   } catch (error) {
@@ -176,13 +176,6 @@ export async function analyzeMarketWithAI(
   timeframe: Timeframe,
   higherTimeframeData?: CandleData[]
 ): Promise<Partial<Signal>> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  
-  if (!apiKey) {
-    console.warn('No OpenRouter API key provided, using technical analysis only');
-    return generateSignalFromTechnical(coin, technicalFactors, timeframe);
-  }
-
   try {
     const prices = candles.map(c => c.close);
     const highs = candles.map(c => c.high);
@@ -299,14 +292,16 @@ IMPORTANT: Consider ALL factors together. A signal is valid only when:
 - Higher timeframe trend agrees (if available)
 
 Return ONLY valid JSON without any additional text.`;
-
+    
     const response = await api.post('/api/analyze', {
       message: userMessage,
       currentPrice: currentPrice,
     });
 
+    console.log('[Claude Service] API Response:', response.data);
+
     if (response.data.error) {
-      console.error('Claude API error:', response.data.error);
+      console.error('[Claude Service] API Error:', response.data.error);
       return generateSignalFromTechnical(coin, technicalFactors, timeframe);
     }
 
@@ -325,6 +320,10 @@ Return ONLY valid JSON without any additional text.`;
         riskRewardRatio = risk > 0 ? reward / risk : 0;
       }
       
+      const isFromAI = analysis.fromAI && !analysis.fallback;
+      
+      console.log('[Claude Service] Signal:', analysis.signal, 'From AI:', isFromAI);
+      
       return {
         type: analysis.signal,
         confidence: analysis.confidence,
@@ -333,15 +332,18 @@ Return ONLY valid JSON without any additional text.`;
         takeProfit,
         riskRewardRatio,
         reasoning: analysis.reasoning,
-        aiAnalysis: analysis.keyFactors?.join('\n'),
-        sources: ['Technical Analysis', 'AI Analysis (OpenRouter)'],
-        model: analysis.model || AI_CONFIG.modelName,
+        aiAnalysis: analysis.keyFactors?.join('\n') || '',
+        sources: isFromAI 
+          ? ['AI Analysis (OpenRouter)'] 
+          : ['Technical Analysis'],
+        model: analysis.model || (isFromAI ? AI_CONFIG.modelName : 'Fallback'),
       };
     }
 
+    console.log('[Claude Service] No valid signal, using fallback');
     return generateSignalFromTechnical(coin, technicalFactors, timeframe);
   } catch (error) {
-    console.error('Error calling OpenRouter API:', error);
+    console.error('[Claude Service] Error:', error);
     return generateSignalFromTechnical(coin, technicalFactors, timeframe);
   }
 }

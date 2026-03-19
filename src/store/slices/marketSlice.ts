@@ -11,6 +11,11 @@ interface MarketState {
   candlesLoading: boolean;
   error: string | null;
   lastUpdated: number | null;
+  wsConnected: boolean;
+  wsError: string | null;
+  klineWsConnected: boolean;
+  klineWsError: string | null;
+  usePolling: boolean;
 }
 
 const initialState: MarketState = {
@@ -23,6 +28,11 @@ const initialState: MarketState = {
   candlesLoading: false,
   error: null,
   lastUpdated: null,
+  wsConnected: false,
+  wsError: null,
+  klineWsConnected: false,
+  klineWsError: null,
+  usePolling: false,
 };
 
 const marketSlice = createSlice({
@@ -68,6 +78,30 @@ const marketSlice = createSlice({
         coin.change24h = change24h;
       }
     },
+    setWsConnected(state, action: PayloadAction<boolean>) {
+      state.wsConnected = action.payload;
+      if (action.payload) {
+        state.wsError = null;
+        state.usePolling = false;
+      }
+    },
+    setWsError(state, action: PayloadAction<string | null>) {
+      state.wsError = action.payload;
+      state.wsConnected = false;
+      if (action.payload) {
+        state.usePolling = true;
+      }
+    },
+    setKlineWsConnected(state, action: PayloadAction<boolean>) {
+      state.klineWsConnected = action.payload;
+      if (action.payload) {
+        state.klineWsError = null;
+      }
+    },
+    setKlineWsError(state, action: PayloadAction<string | null>) {
+      state.klineWsError = action.payload;
+      state.klineWsConnected = false;
+    },
   },
 });
 
@@ -81,6 +115,10 @@ export const {
   setCandlesLoading,
   setError,
   updatePrice,
+  setWsConnected,
+  setWsError,
+  setKlineWsConnected,
+  setKlineWsError,
 } = marketSlice.actions;
 
 export default marketSlice.reducer;

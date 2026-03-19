@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Star } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSelectedCoin, updatePrice } from '@/store/slices/marketSlice';
@@ -8,9 +8,14 @@ import { updatePositionsPrices } from '@/store/slices/portfolioSlice';
 import { formatPrice, formatPercentage } from '@/utils/formatters';
 import { clsx } from 'clsx';
 
-export function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void;
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
   const dispatch = useAppDispatch();
   const { coins, selectedCoin, prices } = useAppSelector((state) => state.market);
+  const wsInitialized = useRef(false);
 
   useEffect(() => {
     if (coins.length === 0) {
@@ -19,18 +24,16 @@ export function Sidebar() {
   }, [dispatch, coins.length]);
 
   useEffect(() => {
-    if (coins.length === 0) return;
+    if (wsInitialized.current || coins.length === 0) return;
+    wsInitialized.current = true;
 
     const STABLECOINS = ['USDT', 'USDC', 'DAI', 'USDe', 'BUSD', 'USDD', 'TUSD', 'USDP'];
-    const filteredCoins = coins.filter(c => {
-      const symbol = c.symbol;
-      return (
-        !STABLECOINS.includes(symbol) &&
-        symbol.length >= 2 &&
-        symbol.length <= 10 &&
-        /^[A-Z]+$/.test(symbol)
-      );
-    });
+    const filteredCoins = coins.filter(c => 
+      !STABLECOINS.includes(c.symbol) && 
+      !c.symbol.match(/\d/) &&
+      c.symbol.length >= 2 &&
+      c.symbol.length <= 10
+    );
     
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
@@ -39,7 +42,9 @@ export function Sidebar() {
     const connect = () => {
       if (ws?.readyState === WebSocket.OPEN) return;
       
-      const symbols = filteredCoins.slice(0, 15).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
+      const symbols = filteredCoins.slice(0, 20).map(c => `${c.symbol.toLowerCase()}usdt@ticker`).join('/');
+      if (!symbols) return;
+      
       const wsUrl = `wss://stream.binance.com:9443/stream?streams=${symbols}`;
       
       console.log('Connecting WebSocket from Sidebar...', wsUrl);
@@ -98,7 +103,7 @@ export function Sidebar() {
         ws = null;
       }
     };
-  }, [coins, dispatch]);
+  }, []);
 
   const topGainers = [...coins]
     .sort((a, b) => b.change24h - a.change24h)
@@ -110,6 +115,7 @@ export function Sidebar() {
 
   const handleSelectCoin = (symbol: string) => {
     dispatch(setSelectedCoin(symbol));
+    onClose?.();
   };
 
   const getPrice = (symbol: string) => {
@@ -121,7 +127,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-[#12121a] border-r border-[#2d2d3a] flex flex-col h-[calc(100vh-64px)]">
+    <aside className="w-64 bg-[#12121a] border-r border-[#2d2d3a] flex flex-col h-full">
       <div className="p-4 border-b border-[#2d2d3a] shrink-0" style={{ minHeight: '180px' }}>
         <h2 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-3">
           Top Gainers
@@ -132,7 +138,7 @@ export function Sidebar() {
               key={coin.symbol}
               onClick={() => handleSelectCoin(coin.symbol)}
               className={clsx(
-                'w-full flex items-center justify-between p-2 rounded-lg transition-colors',
+                'w-full flex items-center justify-between p-2 rounded-lg transition-colors active:scale-95',
                 selectedCoin === coin.symbol
                   ? 'bg-[#1a1a24] border border-[#2d2d3a]'
                   : 'hover:bg-[#1a1a24]'
@@ -160,7 +166,7 @@ export function Sidebar() {
               key={coin.symbol}
               onClick={() => handleSelectCoin(coin.symbol)}
               className={clsx(
-                'w-full flex items-center justify-between p-2 rounded-lg transition-colors',
+                'w-full flex items-center justify-between p-2 rounded-lg transition-colors active:scale-95',
                 selectedCoin === coin.symbol
                   ? 'bg-[#1a1a24] border border-[#2d2d3a]'
                   : 'hover:bg-[#1a1a24]'
@@ -188,7 +194,7 @@ export function Sidebar() {
               key={coin.symbol}
               onClick={() => handleSelectCoin(coin.symbol)}
               className={clsx(
-                'w-full flex items-center justify-between p-2 rounded-lg transition-colors',
+                'w-full flex items-center justify-between p-2 rounded-lg transition-colors active:scale-95',
                 selectedCoin === coin.symbol
                   ? 'bg-[#1a1a24] border border-[#8b5cf6]'
                   : 'hover:bg-[#1a1a24]'

@@ -1,7 +1,7 @@
 export const AI_CONFIG = {
   provider: 'openrouter',
-  model: 'anthropic/claude-opus-4-20250514',
-  modelName: 'Claude Opus 4.6',
+  model: 'openai/gpt-4o-mini',
+  modelName: 'GPT-4o Mini',
   maxTokens: 1500,
 } as const;
 

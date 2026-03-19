@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSide, setQuantity, setOrderType, setLimitPrice } from '@/store/slices/tradingSlice';

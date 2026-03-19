@@ -21,17 +21,17 @@ When calculating:
 - Take Profit: At least 1.5x the risk distance (e.g., if SL is 5% away, TP should be 7.5%+ away)
 - Entry Price: Current market price or slight discount/premium only
 
-Provide your analysis in a JSON format:
+Provide your analysis in a JSON format with EXACT keys:
 {
-  "signal": "BUY" | "SELL" | "HOLD",
-  "confidence": number (0-100, but be REALISTIC - most setups are 50-75%, only very strong ones are 80%+),
+  "signal": "BUY" or "SELL" or "HOLD",
+  "confidence": number between 0-100,
   "entryPrice": number,
   "stopLoss": number,
   "takeProfit": number,
   "riskRewardRatio": number,
   "reasoning": "string explaining WHY this signal",
-  "keyFactors": ["string"],
-  "riskLevel": "low" | "medium" | "high"
+  "keyFactors": ["factor1", "factor2", "factor3"],
+  "riskLevel": "low" or "medium" or "high"
 }`;
 
 export async function POST(request: Request) {
@@ -41,23 +41,29 @@ export async function POST(request: Request) {
 
     const apiKey = process.env.OPENROUTER_API_KEY;
 
-    console.log('OpenRouter API Key exists:', !!apiKey);
-    console.log('Using model:', AI_CONFIG.model);
+    console.log('[Analyze API] ========== START ==========');
+    console.log('[Analyze API] API Key exists:', !!apiKey);
+    console.log('[Analyze API] Model:', AI_CONFIG.model);
 
     if (!apiKey) {
+      console.error('[Analyze API] ERROR: Missing API key');
       return NextResponse.json(
-        { error: 'OpenRouter API key not configured' },
+        { 
+          error: 'OpenRouter API key not configured', 
+          fallback: true,
+          reason: 'Missing OPENROUTER_API_KEY in environment'
+        },
         { status: 500 }
       );
     }
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    console.log('[Analyze API] Calling OpenRouter API...');
+    
+    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://crypto-mind-virid.vercel.app',
-        'X-Title': 'CryptoMind',
       },
       body: JSON.stringify({
         model: AI_CONFIG.model,
@@ -69,71 +75,76 @@ export async function POST(request: Request) {
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    console.log('[Analyze API] Response status:', openRouterResponse.status);
+
+    if (!openRouterResponse.ok) {
+      const errorText = await openRouterResponse.text();
+      console.error('[Analyze API] OpenRouter ERROR:', openRouterResponse.status, errorText);
       return NextResponse.json(
-        { error: `OpenRouter API error: ${response.status}`, details: errorText },
-        { status: response.status }
+        { 
+          error: `OpenRouter API error: ${openRouterResponse.status}`, 
+          details: errorText,
+          fallback: true
+        },
+        { status: openRouterResponse.status }
       );
     }
 
-    const data = await response.json();
+    const data = await openRouterResponse.json();
+    console.log('[Analyze API] Response data received');
+    
     const content = data.choices?.[0]?.message?.content || '';
+    console.log('[Analyze API] Content length:', content.length);
+
+    if (!content) {
+      console.error('[Analyze API] Empty response from OpenRouter');
+      return NextResponse.json(
+        { 
+          signal: 'HOLD',
+          confidence: 50,
+          reasoning: 'Empty response from AI',
+          fallback: true
+        },
+        { status: 200 }
+      );
+    }
 
     try {
       let jsonStr = content.trim();
       
-      if (jsonStr.includes('```json')) {
-        jsonStr = jsonStr.split('```json')[1].split('```')[0];
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0];
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.replace(/```json\n?|```\n?/g, '').trim();
       }
-      
-      jsonStr = jsonStr.trim();
       
       const analysis = JSON.parse(jsonStr);
       
-      console.log('AI Analysis Response:', JSON.stringify(analysis, null, 2));
+      console.log('[Analyze API] Parsed:', analysis.signal, analysis.confidence);
       
-      analysis.model = AI_CONFIG.modelName;
-      
-      if (!analysis.entryPrice || !analysis.stopLoss || !analysis.takeProfit) {
-        console.warn('AI response missing price targets, using calculated values');
-        
-        const price = currentPrice || 50000;
-        
-        if (analysis.signal === 'BUY') {
-          analysis.entryPrice = analysis.entryPrice || price;
-          analysis.stopLoss = analysis.stopLoss || price * 0.97;
-          analysis.takeProfit = analysis.takeProfit || price * 1.06;
-        } else if (analysis.signal === 'SELL') {
-          analysis.entryPrice = analysis.entryPrice || price;
-          analysis.stopLoss = analysis.stopLoss || price * 1.03;
-          analysis.takeProfit = analysis.takeProfit || price * 0.94;
-        } else {
-          analysis.entryPrice = price;
-          analysis.stopLoss = price * 0.95;
-          analysis.takeProfit = price * 1.05;
-        }
-        
-        analysis.riskRewardRatio = analysis.riskRewardRatio || 
-          Math.abs((analysis.takeProfit - analysis.entryPrice) / (analysis.entryPrice - analysis.stopLoss));
-      }
-      
-      return NextResponse.json(analysis);
+      return NextResponse.json({
+        ...analysis,
+        model: AI_CONFIG.modelName,
+        fromAI: true,
+      });
     } catch (parseError) {
-      console.error('Failed to parse AI response:', content);
+      console.error('[Analyze API] JSON parse error:', parseError);
+      console.error('[Analyze API] Raw content:', content.substring(0, 500));
       return NextResponse.json({
         signal: 'HOLD',
         confidence: 50,
-        reasoning: 'Could not parse AI response, using technical analysis only',
-        keyFactors: ['Technical analysis fallback'],
+        reasoning: 'Could not parse AI response',
+        keyFactors: ['Technical analysis'],
         riskLevel: 'medium',
+        fallback: true,
+        parseError: true,
       });
     }
-  } catch (error: any) {
+  } catch (error) {
+    console.error('[Analyze API] FATAL ERROR:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to analyze market' },
+      { 
+        error: (error as Error).message || 'Failed to analyze market',
+        fallback: true
+      },
       { status: 500 }
     );
   }

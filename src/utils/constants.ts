@@ -2,8 +2,6 @@ export const CMC_BASE_URL = 'https://pro-api.coinmarketcap.com/v1';
 
 export const BINANCE_BASE_URL = 'https://api.binance.com/api/v3';
 
-export const ANTHROPIC_BASE_URL = 'https://api.anthropic.com/v1';
-
 export const DEFAULT_PAPER_BALANCE = 10000;
 
 export const TRADING_PAIRS = [

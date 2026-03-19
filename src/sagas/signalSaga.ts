@@ -1,11 +1,10 @@
-import { call, put, select, takeLatest, all, delay, fork, take } from 'redux-saga/effects';
+import { call, put, select, takeLatest, delay, fork } from 'redux-saga/effects';
 import { setCurrentSignal, setTechnicalFactors, setAnalyzing, setError, updateSignalResult } from '@/store/slices/signalSlice';
 import { analyzeMarketWithAI, calculateTechnicalFactors } from '@/services/claude';
-import { fetchKlines, fetchTicker } from '@/services/binance';
+import { fetchTicker } from '@/services/binance';
 import type { RootState } from '@/store';
 import type { Signal, Coin, Timeframe, CandleData } from '@/types';
 import { generateId } from '@/utils/formatters';
-import { TIMEFRAME_INTERVALS } from '@/utils/constants';
 
 const TIMEFRAME_EVALUATION_MS: Record<Timeframe, number> = {
   '1H': 60 * 60 * 1000,
@@ -19,6 +18,8 @@ interface AnalyzeAction {
   payload: {
     coin: Coin;
     timeframe: Timeframe;
+    candles?: CandleData[] | null;
+    higherTimeframeCandles?: CandleData[];
   };
 }
 
@@ -29,7 +30,7 @@ function getHigherTimeframe(timeframe: Timeframe): Timeframe | null {
 }
 
 function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
-  const { coin, timeframe = action.payload.timeframe } = action.payload;
+  const { coin, timeframe, candles: providedCandles, higherTimeframeCandles: providedHTF } = action.payload;
   
   if (!timeframe) {
     console.error('No timeframe provided');
@@ -40,27 +41,25 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
   yield put(setError(null));
   
   try {
-    const symbol = `${coin.symbol}/USDT`;
-    
-    const candles = yield call(fetchKlines, symbol, timeframe, 200);
+    let candles = providedCandles;
+    let higherTimeframeCandles = providedHTF;
     
     if (!candles || candles.length === 0) {
-      throw new Error('No candle data available');
+      console.error('[SignalSaga] No candles provided or candles empty:', { 
+        hasCandles: !!candles, 
+        length: candles?.length,
+        coin: coin.symbol,
+        timeframe 
+      });
+      throw new Error(`Failed to fetch candle data for ${coin.symbol}. Please check your network connection and try again.`);
     }
+    
+    console.log(`[SignalSaga] Analyzing ${coin.symbol} ${timeframe} with ${candles.length} candles`);
     
     const technicalFactors = calculateTechnicalFactors(candles, coin);
     yield put(setTechnicalFactors(technicalFactors));
     
-    let higherTimeframeCandles: CandleData[] | undefined;
-    const higherTF = getHigherTimeframe(timeframe);
-    
-    if (higherTF) {
-      try {
-        higherTimeframeCandles = yield call(fetchKlines, symbol, higherTF, 50);
-      } catch (e) {
-        console.warn('Failed to fetch higher timeframe data:', e);
-      }
-    }
+    console.log(`[SignalSaga] Technical factors calculated, calling AI...`);
     
     const aiAnalysis = yield call(
       analyzeMarketWithAI, 
@@ -69,7 +68,9 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
       technicalFactors, 
       timeframe,
       higherTimeframeCandles
-    );
+    ) as unknown as Partial<Signal>;
+    
+    console.log(`[SignalSaga] AI Analysis result:`, aiAnalysis.type, aiAnalysis.confidence);
     
     const validatedSignal = validateSignal(aiAnalysis, technicalFactors, coin.price);
     
@@ -80,7 +81,7 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
       confidence: validatedSignal.confidence,
       timeframe,
       price: coin.price,
-      entryPrice: aiAnalysis.entryPrice || coin.price,
+      entryPrice: aiAnalysis.entryPrice ?? coin.price,
       stopLoss: aiAnalysis.stopLoss,
       takeProfit: aiAnalysis.takeProfit,
       riskRewardRatio: aiAnalysis.riskRewardRatio,
@@ -94,10 +95,11 @@ function* analyzeMarketSaga(action: AnalyzeAction): Generator<any, void, any> {
     };
     
     yield put(setCurrentSignal(signal));
+    console.log(`[SignalSaga] Signal created:`, signal.type, signal.confidence, '%');
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Analysis error:', error);
-    yield put(setError(error.message || 'Analysis failed'));
+    yield put(setError((error as Error).message || 'Analysis failed'));
   } finally {
     yield put(setAnalyzing(false));
   }

@@ -66,62 +66,62 @@ export default function MarketsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 lg:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Markets</h1>
-            <p className="text-[#64748b]">Cryptocurrency market overview</p>
+            <h1 className="text-xl lg:text-2xl font-bold">Markets</h1>
+            <p className="text-sm text-[#64748b] hidden sm:block">Cryptocurrency market overview</p>
           </div>
           <button
             onClick={handleRefresh}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1a1a24] rounded-lg hover:bg-[#2d2d3a] transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#1a1a24] rounded-lg hover:bg-[#2d2d3a] transition-colors active:scale-95"
           >
             <RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b]" />
             <input
               type="text"
               placeholder="Search coins..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#12121a] border border-[#2d2d3a] rounded-lg pl-10 pr-4 py-2 text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6]"
+              className="w-full bg-[#12121a] border border-[#2d2d3a] rounded-lg pl-10 pr-4 py-2.5 text-white placeholder-[#64748b] focus:outline-none focus:border-[#3b82f6] text-sm"
             />
           </div>
         </div>
 
         <div className="bg-[#12121a] rounded-xl border border-[#2d2d3a] overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#2d2d3a]">
-                  <th className="text-left p-4 text-sm font-medium text-[#64748b]">#</th>
-                  <th className="text-left p-4 text-sm font-medium text-[#64748b]">Coin</th>
+                  <th className="text-left p-3 text-sm font-medium text-[#64748b]">#</th>
+                  <th className="text-left p-3 text-sm font-medium text-[#64748b]">Coin</th>
                   <th 
-                    className="text-right p-4 text-sm font-medium text-[#64748b] cursor-pointer hover:text-white"
+                    className="text-right p-3 text-sm font-medium text-[#64748b] cursor-pointer hover:text-white"
                     onClick={() => handleSort('price')}
                   >
                     Price {sortBy === 'price' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    className="text-right p-4 text-sm font-medium text-[#64748b] cursor-pointer hover:text-white"
+                    className="text-right p-3 text-sm font-medium text-[#64748b] cursor-pointer hover:text-white"
                     onClick={() => handleSort('change24h')}
                   >
-                    24h Change {sortBy === 'change24h' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    24h {sortBy === 'change24h' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    className="text-right p-4 text-sm font-medium text-[#64748b] cursor-pointer hover:text-white"
+                    className="text-right p-3 text-sm font-medium text-[#64748b] cursor-pointer hover:text-white hidden lg:table-cell"
                     onClick={() => handleSort('marketCap')}
                   >
                     Market Cap {sortBy === 'marketCap' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-right p-4 text-sm font-medium text-[#64748b]">Volume (24h)</th>
-                  <th className="text-right p-4 text-sm font-medium text-[#64748b]">Actions</th>
+                  <th className="text-right p-3 text-sm font-medium text-[#64748b] hidden lg:table-cell">Volume (24h)</th>
+                  <th className="text-right p-3 text-sm font-medium text-[#64748b]">Trade</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,8 +134,8 @@ export default function MarketsPage() {
                     )}
                     onClick={() => handleSelectCoin(coin.symbol)}
                   >
-                    <td className="p-4 text-sm text-[#64748b]">{coin.rank}</td>
-                    <td className="p-4">
+                    <td className="p-3 text-sm text-[#64748b]">{coin.rank}</td>
+                    <td className="p-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#1a1a24] flex items-center justify-center text-xs font-bold">
                           {coin.symbol.slice(0, 2)}
@@ -146,10 +146,10 @@ export default function MarketsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="p-4 text-right font-medium">
+                    <td className="p-3 text-right font-medium">
                       ${formatPrice(coin.price)}
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-3 text-right">
                       <div className={clsx(
                         'flex items-center justify-end gap-1',
                         coin.change24h >= 0 ? 'text-[#00d26a]' : 'text-[#ff3b30]'
@@ -162,20 +162,20 @@ export default function MarketsPage() {
                         {formatPercentage(coin.change24h)}
                       </div>
                     </td>
-                    <td className="p-4 text-right text-sm">
+                    <td className="p-3 text-right text-sm hidden lg:table-cell">
                       ${formatCompactNumber(coin.marketCap)}
                     </td>
-                    <td className="p-4 text-right text-sm text-[#94a3b8]">
+                    <td className="p-3 text-right text-sm text-[#94a3b8] hidden lg:table-cell">
                       ${formatCompactNumber(coin.volume24h)}
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-3 text-right">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           dispatch(setSelectedCoin(coin.symbol));
                           router.push('/trading');
                         }}
-                        className="px-3 py-1 text-xs bg-[#3b82f6] rounded hover:bg-[#2563eb] transition-colors"
+                        className="px-3 py-1.5 text-xs bg-[#3b82f6] rounded hover:bg-[#2563eb] transition-colors active:scale-95"
                       >
                         Trade
                       </button>
@@ -184,6 +184,51 @@ export default function MarketsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="md:hidden divide-y divide-[#2d2d3a]">
+            {filteredCoins.slice(0, 30).map((coin) => (
+              <div
+                key={coin.symbol}
+                className={clsx(
+                  'p-4 hover:bg-[#1a1a24] transition-colors cursor-pointer',
+                  selectedCoin === coin.symbol && 'bg-[#1a1a24] border-l-2 border-[#8b5cf6]'
+                )}
+                onClick={() => handleSelectCoin(coin.symbol)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#1a1a24] flex items-center justify-center text-sm font-bold">
+                      {coin.symbol.slice(0, 2)}
+                    </div>
+                    <div>
+                      <p className="font-medium">{coin.name}</p>
+                      <p className="text-xs text-[#64748b]">{coin.symbol} · Rank #{coin.rank}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dispatch(setSelectedCoin(coin.symbol));
+                      router.push('/trading');
+                    }}
+                    className="px-3 py-1.5 text-xs bg-[#3b82f6] rounded hover:bg-[#2563eb] transition-colors active:scale-95"
+                  >
+                    Trade
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold">${formatPrice(coin.price)}</span>
+                  <span className={clsx(
+                    'flex items-center gap-1 text-sm font-medium',
+                    coin.change24h >= 0 ? 'text-[#00d26a]' : 'text-[#ff3b30]'
+                  )}>
+                    {coin.change24h >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    {formatPercentage(coin.change24h)}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
